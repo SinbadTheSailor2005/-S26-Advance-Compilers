@@ -12,12 +12,6 @@ public class Context {
   private LinkedList<HashMap<String, Type>> scopes = new LinkedList<>();
 
 
-  public void setExpectedReturnType(
-          Class<? extends Type> expectedReturnType) {
-    this.expectedReturnType = expectedReturnType;
-  }
-
-  public Class<? extends Type> expectedReturnType = null;
 
   public Context() {
 

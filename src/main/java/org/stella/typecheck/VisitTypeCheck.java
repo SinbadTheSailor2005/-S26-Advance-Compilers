@@ -16,40 +16,51 @@ import org.syntax.stella.Absyn.*;
 public class VisitTypeCheck {
 
   public static boolean isSameType(Type t1, Type t2) {
-    
-    if (t1 == null || t2 == null) return t1 == t2;
+    if (t1 == null || t2 == null) return false;
 
-    
+
     if (t1 instanceof TypeNat && t2 instanceof TypeNat) return true;
     if (t1 instanceof TypeBool && t2 instanceof TypeBool) return true;
     if (t1 instanceof TypeUnit && t2 instanceof TypeUnit) return true;
 
-    
-    if (t1 instanceof TypeFun tf1 && t2 instanceof TypeFun tf2) {
-      
-      if (!isSameType(tf1.type_, tf2.type_)) return false;
 
-      
-      if (tf1.listtype_.size() != tf2.listtype_.size()) return false;
-      for (int i = 0; i < tf1.listtype_.size(); i++) {
-        if (!isSameType(tf1.listtype_.get(i), tf2.listtype_.get(i))) return false;
-      }
-      return true;
+    if (t1 instanceof TypeFun tf1 && t2 instanceof TypeFun tf2) {
+      return isSameType(tf1.listtype_.get(0), tf2.listtype_.get(0)) &&
+              isSameType(tf1.type_, tf2.type_);
     }
 
-    
+
+    if (t1 instanceof TypeList tl1 && t2 instanceof TypeList tl2) {
+      return isSameType(tl1.type_, tl2.type_);
+    }
+
+
     if (t1 instanceof TypeTuple tt1 && t2 instanceof TypeTuple tt2) {
       if (tt1.listtype_.size() != tt2.listtype_.size()) return false;
       for (int i = 0; i < tt1.listtype_.size(); i++) {
-        if (!isSameType(tt1.listtype_.get(i), tt2.listtype_.get(i))) return false;
+        if (!isSameType(tt1.listtype_.get(i), tt2.listtype_.get(i)))
+          return false;
       }
       return true;
     }
 
-    
+
+    if (t1 instanceof TypeSum ts1 && t2 instanceof TypeSum ts2) {
+      return isSameType(ts1.type_1, ts2.type_1) && isSameType(
+              ts1.type_2, ts2.type_2);
+    }
+
+
+    if (t1 instanceof TypeRecord tr1 && t2 instanceof TypeRecord tr2) {
+      if (tr1.listrecordfieldtype_.size() != tr2.listrecordfieldtype_.size())
+        return false;
+
+      return true;
+    }
 
     return false;
   }
+
   public class ProgramVisitor implements org.syntax.stella.Absyn.Program.Visitor<Type, Context> {
     public Type visit(
             org.syntax.stella.Absyn.AProgram p,
@@ -58,25 +69,41 @@ public class VisitTypeCheck {
       for (org.syntax.stella.Absyn.Extension x : p.listextension_) {
         x.accept(new ExtensionVisitor(), ctx);
       }
-      checkMainExistence(p.listdecl_);
+      checkMain(p.listdecl_);
       for (org.syntax.stella.Absyn.Decl x : p.listdecl_) {
         x.accept(new DeclVisitor(), ctx);
       }
       return null;
     }
 
-    private void checkMainExistence(ListDecl listdecl) {
+    private void checkMain(ListDecl listdecl) {
+      var declType = checkMainExistence(listdecl);
+      checkMainType(declType);
+    }
+
+    private void checkMainType(Decl declType) {
+      if (!(declType instanceof DeclFun)) {
+        throw new TypeCheckException(
+                TypeCheckException.ErrorType.ERROR_INCORRECT_TYPE_OF_MAIN,
+                "Function 'main' has incorrect type. Should be function"
+        );
+      }
+    }
+
+    private Decl checkMainExistence(ListDecl listdecl) {
       for (var decl : listdecl) {
         if (decl instanceof DeclFun df) {
           String name = df.stellaident_.trim();
           if (name.equals("main")) {
-            return;
+            return decl;
           }
         }
 
       }
       throw new TypeCheckException(
-              TypeCheckException.ErrorType.ERROR_MISSING_MAIN);
+              TypeCheckException.ErrorType.ERROR_MISSING_MAIN,
+              "Function 'main' is not defined."
+      );
     }
 
     public static class LanguageDeclVisitor implements org.syntax.stella.Absyn.LanguageDecl.Visitor<Type, Context> {
@@ -92,7 +119,7 @@ public class VisitTypeCheck {
               org.syntax.stella.Absyn.AnExtension p,
               Context ctx) { /* Code for AnExtension goes here */
         for (String x : p.listextensionname_) {
-          
+
         }
         return null;
       }
@@ -105,7 +132,7 @@ public class VisitTypeCheck {
         for (org.syntax.stella.Absyn.Annotation x : p.listannotation_) {
           x.accept(new AnnotationVisitor(), ctx);
         }
-        
+
         for (org.syntax.stella.Absyn.ParamDecl x : p.listparamdecl_) {
           x.accept(new ParamDeclVisitor(), ctx);
         }
@@ -124,9 +151,9 @@ public class VisitTypeCheck {
         for (org.syntax.stella.Absyn.Annotation x : p.listannotation_) {
           x.accept(new AnnotationVisitor(), ctx);
         }
-        
+
         for (String x : p.liststellaident_) {
-          
+
         }
         for (org.syntax.stella.Absyn.ParamDecl x : p.listparamdecl_) {
           x.accept(new ParamDeclVisitor(), ctx);
@@ -143,7 +170,7 @@ public class VisitTypeCheck {
       public Type visit(
               org.syntax.stella.Absyn.DeclTypeAlias p,
               Context ctx) { /* Code for DeclTypeAlias goes here */
-        
+
         p.type_.accept(new TypeVisitor(), ctx);
         return null;
       }
@@ -158,7 +185,7 @@ public class VisitTypeCheck {
       public Type visit(
               org.syntax.stella.Absyn.DeclExceptionVariant p,
               Context ctx) { /* Code for DeclExceptionVariant goes here */
-        
+
         p.type_.accept(new TypeVisitor(), ctx);
         return null;
       }
@@ -185,9 +212,8 @@ public class VisitTypeCheck {
       public Type visit(
               org.syntax.stella.Absyn.AParamDecl p,
               Context ctx) { /* Code for AParamDecl goes here */
-        
-        p.type_.accept(new TypeVisitor(), ctx);
-        return null;
+
+        return p.type_.accept(new TypeVisitor(), ctx);
       }
     }
 
@@ -244,7 +270,7 @@ public class VisitTypeCheck {
               org.syntax.stella.Absyn.TypeForAll p,
               Context ctx) { /* Code for TypeForAll goes here */
         for (String x : p.liststellaident_) {
-          
+
         }
         p.type_.accept(new TypeVisitor(), ctx);
         return null;
@@ -253,7 +279,7 @@ public class VisitTypeCheck {
       public Type visit(
               org.syntax.stella.Absyn.TypeRec p,
               Context ctx) { /* Code for TypeRec goes here */
-        
+
         p.type_.accept(new TypeVisitor(), ctx);
         return null;
       }
@@ -340,7 +366,7 @@ public class VisitTypeCheck {
       public Type visit(
               org.syntax.stella.Absyn.TypeVar p,
               Context ctx) { /* Code for TypeVar goes here */
-        
+
         return null;
       }
     }
@@ -420,7 +446,7 @@ public class VisitTypeCheck {
       public Type visit(
               org.syntax.stella.Absyn.PatternVariant p,
               Context ctx) { /* Code for PatternVariant goes here */
-        
+
         p.patterndata_.accept(new PatternDataVisitor(), ctx);
         return null;
       }
@@ -495,7 +521,7 @@ public class VisitTypeCheck {
       public Type visit(
               org.syntax.stella.Absyn.PatternInt p,
               Context ctx) { /* Code for PatternInt goes here */
-        
+
         return null;
       }
 
@@ -509,7 +535,7 @@ public class VisitTypeCheck {
       public Type visit(
               org.syntax.stella.Absyn.PatternVar p,
               Context ctx) { /* Code for PatternVar goes here */
-        
+
         return null;
       }
     }
@@ -518,7 +544,7 @@ public class VisitTypeCheck {
       public Type visit(
               org.syntax.stella.Absyn.ALabelledPattern p,
               Context ctx) { /* Code for ALabelledPattern goes here */
-        
+
         p.pattern_.accept(new PatternVisitor(), ctx);
         return null;
       }
@@ -528,7 +554,7 @@ public class VisitTypeCheck {
       public Type visit(
               org.syntax.stella.Absyn.ABinding p,
               Context ctx) { /* Code for ABinding goes here */
-        
+
         p.expr_.accept(new ExprVisitor(), ctx);
         return null;
       }
@@ -567,7 +593,7 @@ public class VisitTypeCheck {
               org.syntax.stella.Absyn.TypeAbstraction p,
               Context ctx) { /* Code for TypeAbstraction goes here */
         for (String x : p.liststellaident_) {
-          
+
         }
         p.expr_.accept(new ExprVisitor(), ctx);
         return null;
@@ -584,16 +610,25 @@ public class VisitTypeCheck {
       public Type visit(
               org.syntax.stella.Absyn.If p,
               Context ctx) { /* Code for If goes here */
-        var t1 = p.expr_1.accept(new ExprVisitor(),
-                ctx);
+        var t1 = p.expr_1.accept(
+                new ExprVisitor(),
+                ctx
+        );
         var t2 = p.expr_2.accept(new ExprVisitor(), ctx);
         var t3 = p.expr_3.accept(new ExprVisitor(), ctx);
-
-        if (!(t1 instanceof TypeBool &&
+        if (!(t1 instanceof TypeBool)) {
+          throw new TypeCheckException(
+                  TypeCheckException.ErrorType.ERROR_UNEXPECTED_TYPE_FOR_EXPRESSION,
+                  new TypeBool(), t1
+          );
+        }
+        if (!(
                 isSameType(t2, t3))
         ) {
           throw new TypeCheckException(
-                  TypeCheckException.ErrorType.ERROR_UNEXPECTED_TYPE_FOR_EXPRESSION);
+                  TypeCheckException.ErrorType.ERROR_UNEXPECTED_TYPE_FOR_EXPRESSION,
+                  t2, t3
+          );
 
         }
         return t2;
@@ -663,20 +698,30 @@ public class VisitTypeCheck {
         return null;
       }
 
+      /**
+       * @param p   - Abstraction expression with One parameter
+       * @param ctx
+       * @return TODO: чекнуть работу
+       */
       public Type visit(
               org.syntax.stella.Absyn.Abstraction p,
               Context ctx) { /* Code for Abstraction goes here */
-        for (org.syntax.stella.Absyn.ParamDecl x : p.listparamdecl_) {
-          x.accept(new ParamDeclVisitor(), ctx);
-        }
-        p.expr_.accept(new ExprVisitor(), ctx);
-        return null;
+
+
+        AParamDecl param = (AParamDecl) p.listparamdecl_.getFirst();
+        ctx.enterScope();
+        ctx.addVariable(param.stellaident_, param.type_);
+        var returnType = p.expr_.accept(new ExprVisitor(), ctx);
+        ctx.exitScope();
+        ListType types = new ListType();
+        types.add(param.type_);
+        return new TypeFun(types, returnType);
       }
 
       public Type visit(
               org.syntax.stella.Absyn.Variant p,
               Context ctx) { /* Code for Variant goes here */
-        
+
         p.exprdata_.accept(new ExprDataVisitor(), ctx);
         return null;
       }
@@ -705,10 +750,20 @@ public class VisitTypeCheck {
               Context ctx) { /* Code for Add goes here */
         var t1 = p.expr_1.accept(new ExprVisitor(), ctx);
         var t2 = p.expr_2.accept(new ExprVisitor(), ctx);
-        if (!(t1 instanceof TypeNat && t2 instanceof TypeNat)) {
+        if (!(t1 instanceof TypeNat)) {
+
           throw new TypeCheckException(
-                  TypeCheckException.ErrorType.ERROR_UNEXPECTED_TYPE_FOR_EXPRESSION);
+                  TypeCheckException.ErrorType.ERROR_UNEXPECTED_TYPE_FOR_EXPRESSION,
+                  new TypeNat(), t1
+          );
         }
+        if (!(t2 instanceof TypeNat)) {
+          throw new TypeCheckException(
+                  TypeCheckException.ErrorType.ERROR_UNEXPECTED_TYPE_FOR_EXPRESSION,
+                  new TypeNat(), t2
+          );
+        }
+
         return new TypeNat();
       }
 
@@ -717,9 +772,18 @@ public class VisitTypeCheck {
               Context ctx) { /* Code for Subtract goes here */
         var t1 = p.expr_1.accept(new ExprVisitor(), ctx);
         var t2 = p.expr_2.accept(new ExprVisitor(), ctx);
-        if (!(t1 instanceof TypeNat && t2 instanceof TypeNat)) {
+        if (!(t1 instanceof TypeNat)) {
+
           throw new TypeCheckException(
-                  TypeCheckException.ErrorType.ERROR_UNEXPECTED_TYPE_FOR_EXPRESSION);
+                  TypeCheckException.ErrorType.ERROR_UNEXPECTED_TYPE_FOR_EXPRESSION,
+                  new TypeNat(), t1
+          );
+        }
+        if (!(t2 instanceof TypeNat)) {
+          throw new TypeCheckException(
+                  TypeCheckException.ErrorType.ERROR_UNEXPECTED_TYPE_FOR_EXPRESSION,
+                  new TypeNat(), t2
+          );
         }
         return new TypeNat();
       }
@@ -729,9 +793,18 @@ public class VisitTypeCheck {
               Context ctx) { /* Code for LogicOr goes here */
         var t1 = p.expr_1.accept(new ExprVisitor(), ctx);
         var t2 = p.expr_2.accept(new ExprVisitor(), ctx);
-        if (!(t1 instanceof TypeBool && t2 instanceof TypeBool)) {
+        if (!(t1 instanceof TypeBool)) {
+
           throw new TypeCheckException(
-                  TypeCheckException.ErrorType.ERROR_UNEXPECTED_TYPE_FOR_EXPRESSION);
+                  TypeCheckException.ErrorType.ERROR_UNEXPECTED_TYPE_FOR_EXPRESSION,
+                  new TypeBool(), t1
+          );
+        }
+        if (!(t2 instanceof TypeBool)) {
+          throw new TypeCheckException(
+                  TypeCheckException.ErrorType.ERROR_UNEXPECTED_TYPE_FOR_EXPRESSION,
+                  new TypeBool(), t2
+          );
         }
         return new TypeBool();
       }
@@ -741,9 +814,18 @@ public class VisitTypeCheck {
               Context ctx) { /* Code for Multiply goes here */
         var t1 = p.expr_1.accept(new ExprVisitor(), ctx);
         var t2 = p.expr_2.accept(new ExprVisitor(), ctx);
-        if (!(t1 instanceof TypeNat && t2 instanceof TypeNat)) {
+        if (!(t1 instanceof TypeNat)) {
+
           throw new TypeCheckException(
-                  TypeCheckException.ErrorType.ERROR_UNEXPECTED_TYPE_FOR_EXPRESSION);
+                  TypeCheckException.ErrorType.ERROR_UNEXPECTED_TYPE_FOR_EXPRESSION,
+                  new TypeNat(), t1
+          );
+        }
+        if (!(t2 instanceof TypeNat)) {
+          throw new TypeCheckException(
+                  TypeCheckException.ErrorType.ERROR_UNEXPECTED_TYPE_FOR_EXPRESSION,
+                  new TypeNat(), t2
+          );
         }
         return new TypeNat();
       }
@@ -753,9 +835,18 @@ public class VisitTypeCheck {
               Context ctx) { /* Code for Divide goes here */
         var t1 = p.expr_1.accept(new ExprVisitor(), ctx);
         var t2 = p.expr_2.accept(new ExprVisitor(), ctx);
-        if (!(t1 instanceof TypeNat && t2 instanceof TypeNat)) {
+        if (!(t1 instanceof TypeNat)) {
+
           throw new TypeCheckException(
-                  TypeCheckException.ErrorType.ERROR_UNEXPECTED_TYPE_FOR_EXPRESSION);
+                  TypeCheckException.ErrorType.ERROR_UNEXPECTED_TYPE_FOR_EXPRESSION,
+                  new TypeNat(), t1
+          );
+        }
+        if (!(t2 instanceof TypeNat)) {
+          throw new TypeCheckException(
+                  TypeCheckException.ErrorType.ERROR_UNEXPECTED_TYPE_FOR_EXPRESSION,
+                  new TypeNat(), t2
+          );
         }
         return new TypeNat();
       }
@@ -765,9 +856,18 @@ public class VisitTypeCheck {
               Context ctx) { /* Code for LogicAnd goes here */
         var t1 = p.expr_1.accept(new ExprVisitor(), ctx);
         var t2 = p.expr_2.accept(new ExprVisitor(), ctx);
-        if (!(t1 instanceof TypeBool && t2 instanceof TypeBool)) {
+        if (!(t1 instanceof TypeBool)) {
+
           throw new TypeCheckException(
-                  TypeCheckException.ErrorType.ERROR_UNEXPECTED_TYPE_FOR_EXPRESSION);
+                  TypeCheckException.ErrorType.ERROR_UNEXPECTED_TYPE_FOR_EXPRESSION,
+                  new TypeBool(), t1
+          );
+        }
+        if (!(t2 instanceof TypeBool)) {
+          throw new TypeCheckException(
+                  TypeCheckException.ErrorType.ERROR_UNEXPECTED_TYPE_FOR_EXPRESSION,
+                  new TypeBool(), t2
+          );
         }
         return new TypeBool();
       }
@@ -810,7 +910,7 @@ public class VisitTypeCheck {
               org.syntax.stella.Absyn.DotRecord p,
               Context ctx) { /* Code for DotRecord goes here */
         p.expr_.accept(new ExprVisitor(), ctx);
-        
+
         return null;
       }
 
@@ -818,7 +918,7 @@ public class VisitTypeCheck {
               org.syntax.stella.Absyn.DotTuple p,
               Context ctx) { /* Code for DotTuple goes here */
         p.expr_.accept(new ExprVisitor(), ctx);
-        
+
         return null;
       }
 
@@ -927,8 +1027,14 @@ public class VisitTypeCheck {
       public Type visit(
               org.syntax.stella.Absyn.Succ p,
               Context ctx) { /* Code for Succ goes here */
-        p.expr_.accept(new ExprVisitor(), ctx);
-        return null;
+        var t1 = p.expr_.accept(new ExprVisitor(), ctx);
+        if (!(t1 instanceof TypeNat)) {
+          throw new TypeCheckException(
+                  TypeCheckException.ErrorType.ERROR_UNEXPECTED_TYPE_FOR_EXPRESSION,
+                  new TypeNat(), t1
+          );
+        }
+        return new TypeNat();
       }
 
       public Type visit(
@@ -937,7 +1043,9 @@ public class VisitTypeCheck {
         var t1 = p.expr_.accept(new ExprVisitor(), ctx);
         if (!(t1 instanceof TypeBool)) {
           throw new TypeCheckException(
-                  TypeCheckException.ErrorType.ERROR_UNEXPECTED_TYPE_FOR_EXPRESSION);
+                  TypeCheckException.ErrorType.ERROR_UNEXPECTED_TYPE_FOR_EXPRESSION,
+                  new TypeBool(), t1
+          );
         }
         return new TypeBool();
       }
@@ -945,15 +1053,27 @@ public class VisitTypeCheck {
       public Type visit(
               org.syntax.stella.Absyn.Pred p,
               Context ctx) { /* Code for Pred goes here */
-        p.expr_.accept(new ExprVisitor(), ctx);
-        return null;
+        var t1 = p.expr_.accept(new ExprVisitor(), ctx);
+        if (!(t1 instanceof TypeNat)) {
+          throw new TypeCheckException(
+                  TypeCheckException.ErrorType.ERROR_UNEXPECTED_TYPE_FOR_EXPRESSION,
+                  new TypeNat(), t1
+          );
+        }
+        return new TypeNat();
       }
 
       public Type visit(
               org.syntax.stella.Absyn.IsZero p,
               Context ctx) { /* Code for IsZero goes here */
-        p.expr_.accept(new ExprVisitor(), ctx);
-        return null;
+        var t1 = p.expr_.accept(new ExprVisitor(), ctx);
+        if (!(t1 instanceof TypeNat)) {
+          throw new TypeCheckException(
+                  TypeCheckException.ErrorType.ERROR_UNEXPECTED_TYPE_FOR_EXPRESSION,
+                  new TypeNat(), t1
+          );
+        }
+        return new TypeBool();
       }
 
       public Type visit(
@@ -1009,22 +1129,28 @@ public class VisitTypeCheck {
       public Type visit(
               org.syntax.stella.Absyn.ConstInt p,
               Context ctx) { /* Code for ConstInt goes here */
-        
+        if(p.integer_< 0) {
+          throw new TypeCheckException(
+                  TypeCheckException.ErrorType.ERROR_ILLEGAL_NEGATIVE_LITERAL, "Negative literal " + p.integer_ + " is not allowed")
+        }
         return new TypeNat();
       }
 
       public Type visit(
               org.syntax.stella.Absyn.ConstMemory p,
               Context ctx) { /* Code for ConstMemory goes here */
-        
+
         return null;
       }
 
       public Type visit(
               org.syntax.stella.Absyn.Var p,
               Context ctx) { /* Code for Var goes here */
-       return ctx.lookup(p.stellaident_).orElseThrow(() -> new TypeCheckException(
-               TypeCheckException.ErrorType.ERROR_UNDEFINED_VARIABLE));
+        return ctx.lookup(p.stellaident_)
+                .orElseThrow(() -> new TypeCheckException(
+                        TypeCheckException.ErrorType.ERROR_UNDEFINED_VARIABLE
+                        , "Variable " + p.stellaident_ + "is not defined."
+                ));
       }
     }
 
@@ -1042,7 +1168,7 @@ public class VisitTypeCheck {
       public Type visit(
               org.syntax.stella.Absyn.AVariantFieldType p,
               Context ctx) { /* Code for AVariantFieldType goes here */
-        
+
         p.optionaltyping_.accept(new OptionalTypingVisitor(), ctx);
         return null;
       }
@@ -1052,7 +1178,7 @@ public class VisitTypeCheck {
       public Type visit(
               org.syntax.stella.Absyn.ARecordFieldType p,
               Context ctx) { /* Code for ARecordFieldType goes here */
-        
+
         p.type_.accept(new TypeVisitor(), ctx);
         return null;
       }
