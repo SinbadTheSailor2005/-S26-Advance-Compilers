@@ -3,6 +3,13 @@
 package org.syntax.stella.Absyn;
 
 public class Match  extends Expr {
+  /**
+   *
+   *
+   * match <expr> {
+   *
+   * }
+   */
   public final Expr expr_;
   public final ListMatchCase listmatchcase_;
   public int line_num, col_num, offset;

@@ -3,8 +3,8 @@
 package org.syntax.stella.Absyn;
 
 public class Application  extends Expr {
-  public final Expr expr_;
-  public final ListExpr listexpr_;
+  public final Expr expr_; // то что слева - функция или expr, которая возвращает функцию
+  public final ListExpr listexpr_; // аргументы функции
   public int line_num, col_num, offset;
   public Application(Expr p1, ListExpr p2) { expr_ = p1; listexpr_ = p2; }
 

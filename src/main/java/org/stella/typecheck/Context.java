@@ -10,7 +10,7 @@ public class Context {
 
 
   private LinkedList<HashMap<String, Type>> scopes = new LinkedList<>();
-
+  public Type expectedType; // for bidir typechecking
 
 
   public Context() {

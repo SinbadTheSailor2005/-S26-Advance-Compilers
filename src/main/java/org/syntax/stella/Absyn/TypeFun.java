@@ -3,8 +3,8 @@
 package org.syntax.stella.Absyn;
 
 public class TypeFun  extends Type {
-  public final ListType listtype_;
-  public final Type type_;
+  public final ListType listtype_; // args
+  public final Type type_; // return type
   public int line_num, col_num, offset;
   public TypeFun(ListType p1, Type p2) { listtype_ = p1; type_ = p2; }
 

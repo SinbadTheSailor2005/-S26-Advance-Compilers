@@ -11,7 +11,8 @@ public class TypeCheck
         try {
 
             VisitTypeCheck v = new VisitTypeCheck();
-            program.accept(v.new ProgramVisitor(), null /* initial context information*/);
+            program.accept(v.new ProgramVisitor(), new Context() /* initial context
+            information*/);
             System.exit(0);
         } catch (TypeCheckException e) {
             System.out.println(e.getMessage());

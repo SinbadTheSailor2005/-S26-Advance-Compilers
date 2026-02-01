@@ -22,7 +22,7 @@ public class TypeCheckException extends RuntimeException {
   }
 
   public TypeCheckException(
-          ErrorType errorType, Type expectedType, Type actualType, ) {
+          ErrorType errorType, Type expectedType, Type actualType) {
     this.expectedType = expectedType;
     this.actualType = actualType;
     this.errorType = errorType;

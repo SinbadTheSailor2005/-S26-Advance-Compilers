@@ -1,0 +1,9 @@
+language core;
+
+// Мы ожидаем функцию внутри суммы
+fn main(n : Nat) -> Bool + (fn(Nat) -> Nat) {
+  // Внутри inr находится анонимная функция.
+  // Если вы НЕ сузили контекст, эта fn увидит ожидаемый тип "Bool + (Nat -> Nat)"
+  // и не сможет провериться, так как fn ждет TypeFun, а не TypeSum.
+  return inr(fn(x : Nat) { return x })
+}

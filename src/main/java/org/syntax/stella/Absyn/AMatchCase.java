@@ -2,6 +2,10 @@
 
 package org.syntax.stella.Absyn;
 
+/**
+ *
+ * AMatchCase.    MatchCase ::= Pattern "=>" Expr ;
+ */
 public class AMatchCase  extends MatchCase {
   public final Pattern pattern_;
   public final Expr expr_;
