@@ -2,16 +2,25 @@ package org.stella.typecheck;
 
 import org.syntax.stella.Absyn.Type;
 
-import java.util.HashMap;
-import java.util.LinkedList;
-import java.util.Optional;
+import java.util.*;
 
 public class Context {
 
 
-  private LinkedList<HashMap<String, Type>> scopes = new LinkedList<>();
-  public Type expectedType; // for bidir typechecking
+  private final LinkedList<HashMap<String, Type>> scopes = new LinkedList<>();
+  private final Deque<Type> expectedTypes = new ArrayDeque<>();
 
+  public void pushExpectedType(Type type) {
+    expectedTypes.push(type);
+  }
+
+  public Type popExpectedType() {
+    return expectedTypes.isEmpty() ? null : expectedTypes.pop();
+  }
+
+  public Type getCurrentExpectedType() {
+    return expectedTypes.peek(); // возвращает null, если стек пуст
+  }
 
   public Context() {
 
