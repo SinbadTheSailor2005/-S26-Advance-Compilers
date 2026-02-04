@@ -1133,7 +1133,7 @@ public class VisitTypeCheck {
         Expr argExpr = p.listexpr_.getFirst();
 /**
  * я знаю сигу Application. Значит, тип аргумента ф-ии == типу параметра
- */
+ * Applcation*/
         ctx.pushExpectedType(expectedParamType);
         Type t2 = argExpr.accept(new ExprVisitor(), ctx);
         ctx.popExpectedType();
@@ -1500,8 +1500,20 @@ public class VisitTypeCheck {
       //---------------------
       //Γ ` fix t1 : T1
       public Type visit(org.syntax.stella.Absyn.Fix p, Context ctx) {
+        /**
+         * если нам сверху сказали, что fix должен вернуть тип T, то
+         * функция, которую мы передаем в fix, должна быть типа T -> T
+         */
+        Type expectedT = ctx.getCurrentExpectedType();
+        if (expectedT != null) {
+          ListType lt = new ListType();
+          lt.add(expectedT);
+          ctx.pushExpectedType(new TypeFun(lt, expectedT));
+        }
         Type inferredType = p.expr_.accept(new ExprVisitor(), ctx);
-
+        if (expectedT != null) {
+          ctx.popExpectedType();
+        }
 
         TypeFun funType = checkThatTypeIsTypeFun(inferredType);
 
