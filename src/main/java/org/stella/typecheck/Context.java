@@ -8,7 +8,7 @@ public class Context {
 
 
   private final LinkedList<HashMap<String, Type>> scopes = new LinkedList<>();
-  private final Deque<Type> expectedTypes = new ArrayDeque<>();
+  private final Deque<Type> expectedTypes = new LinkedList<>();
 
   public void pushExpectedType(Type type) {
     expectedTypes.push(type);

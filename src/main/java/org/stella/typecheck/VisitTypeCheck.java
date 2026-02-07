@@ -393,6 +393,10 @@ public class VisitTypeCheck {
     }
 
     // ------------------
+
+    /**
+     * просто чекаем дуюдикаты
+     */
     public class TypeVisitor implements org.syntax.stella.Absyn.Type.Visitor<Type, Context> {
       @Override
       public Type visit(org.syntax.stella.Absyn.TypeRecord p, Context ctx) {
@@ -698,6 +702,7 @@ public class VisitTypeCheck {
       }
     }
 
+    // ------------------
     public class LabelledPatternVisitor implements org.syntax.stella.Absyn.LabelledPattern.Visitor<Type, Context> {
       public Type visit(
               org.syntax.stella.Absyn.ALabelledPattern p,
@@ -729,11 +734,13 @@ public class VisitTypeCheck {
       public Type visit(
               org.syntax.stella.Absyn.Let p,
               Context ctx) { /* Code for Let goes here */
+        ctx.enterScope();
         for (org.syntax.stella.Absyn.PatternBinding x : p.listpatternbinding_) {
           x.accept(new PatternBindingVisitor(), ctx);
         }
-        p.expr_.accept(new ExprVisitor(), ctx);
-        return null;
+        Type bodyType = p.expr_.accept(new ExprVisitor(), ctx);
+        ctx.exitScope();
+        return bodyType;
       }
 
       // TODO: нужно?
@@ -766,26 +773,38 @@ public class VisitTypeCheck {
         return null;
       }
 
-      public Type visit(
-              org.syntax.stella.Absyn.If p,
-              Context ctx) { /* Code for If goes here */
-        var t1 = p.expr_1.accept(new ExprVisitor(), ctx);
-        var t2 = p.expr_2.accept(new ExprVisitor(), ctx);
-        var t3 = p.expr_3.accept(new ExprVisitor(), ctx);
+      public Type visit(org.syntax.stella.Absyn.If p, Context ctx) {
+        ctx.pushExpectedType(new TypeBool());
+        Type t1 = p.expr_1.accept(this, ctx);
+        ctx.popExpectedType();
+
+        checkThatTypeIsBool(t1);
+
+        Type expected = ctx.getCurrentExpectedType();
+        /**
+         * Если прокинули ожидаемый тип, то используем его для обеих веток
+         * иначе просто берем тип из первой ветки
+         */
+        ctx.pushExpectedType(expected);
+        Type t2 = p.expr_2.accept(this, ctx);
+        ctx.popExpectedType();
+
+        ctx.pushExpectedType(expected != null ? expected : t2);
+        Type t3 = p.expr_3.accept(this, ctx);
+        ctx.popExpectedType();
+
+        checkForMismatch(t2, t3);
+
+        return t2;
+      }
+
+      private void checkThatTypeIsBool(Type t1) {
         if (!(t1 instanceof TypeBool)) {
           throw new TypeCheckException(
                   TypeCheckException.ErrorType.ERROR_UNEXPECTED_TYPE_FOR_EXPRESSION,
                   new TypeBool(), t1
           );
         }
-        if (!(isSameType(t2, t3))) {
-          throw new TypeCheckException(
-                  TypeCheckException.ErrorType.ERROR_UNEXPECTED_TYPE_FOR_EXPRESSION,
-                  t2, t3
-          );
-
-        }
-        return t2;
       }
 
       public Type visit(
@@ -836,6 +855,13 @@ public class VisitTypeCheck {
         return null;
       }
 
+      /**
+       * <expr>  as <type>
+       *
+       * @param p
+       * @param ctx
+       * @return
+       */
       public Type visit(
               org.syntax.stella.Absyn.TypeAsc p,
               Context ctx) { /* Code for TypeAsc goes here */
@@ -844,7 +870,7 @@ public class VisitTypeCheck {
         var actualType = p.expr_.accept(new ExprVisitor(), ctx);
         ctx.popExpectedType();
         checkForMismatch(expectedType, actualType);
-        return p.type_;
+        return expectedType;
       }
 
       public Type visit(
@@ -921,7 +947,21 @@ public class VisitTypeCheck {
        */
       @Override
       public Type visit(org.syntax.stella.Absyn.Match p, Context ctx) {
+        // обнуляем для кейса
+        /**
+         * fn f() -> Bool {
+         *   return match (10) { ... } // (1)
+         * }
+         */
+        ctx.pushExpectedType(null);
         Type inputType = p.expr_.accept(this, ctx);
+        ctx.popExpectedType();
+
+        checkThatMatchCasesExist(p);
+
+        boolean checkedInl = false;
+        boolean checkedInr = false;
+        boolean checkedVar = false;
 
         Type outerExpected = ctx.getCurrentExpectedType();
         Type inferredReturnType = null;
@@ -930,24 +970,26 @@ public class VisitTypeCheck {
           org.syntax.stella.Absyn.AMatchCase c =
                   (org.syntax.stella.Absyn.AMatchCase) matchCase;
 
+          if (c.pattern_ instanceof org.syntax.stella.Absyn.PatternInl) {
+            checkedInl = true;
+          } else if (c.pattern_ instanceof org.syntax.stella.Absyn.PatternInr) {
+            checkedInr = true;
+          } else if (c.pattern_ instanceof org.syntax.stella.Absyn.PatternVar) {
+            checkedVar = true;
+          }
+
           ctx.enterScope();
           ctx.pushExpectedType(inputType);
-
           c.pattern_.accept(new PatternVisitor(), ctx);
-
           ctx.popExpectedType();
-
-          /**
-           * need for this case
-           * match n {
-           *   0 => inl(true) as (Bool + Nat) -> infered as TypeSum
-           *   succ(x) => inr(0)
-           * }
-           */
-          Type expectedForCase = outerExpected;
-          if (expectedForCase == null) {
+/**
+ * если нас сверху прокинули ожидаемый тип, то используем его для всех кейсов
+ * иначе для каждого кейса используем тип, который вывели из предыдущих кейсов
+ */
+          Type expectedForCase;
+          if (outerExpected == null) {
             expectedForCase = inferredReturnType;
-          }
+          } else expectedForCase = outerExpected;
 
           Type bodyType;
 
@@ -958,72 +1000,94 @@ public class VisitTypeCheck {
             checkForMismatch(expectedForCase, bodyType);
           } else {
             bodyType = c.expr_.accept(this, ctx);
-            if (inferredReturnType == null) {
-              inferredReturnType = bodyType;
-            } else {
-              checkForMismatch(
-                      inferredReturnType,
-                      bodyType
-              );
-            }
+            inferredReturnType = bodyType;
           }
 
           ctx.exitScope();
         }
 
+        checkForExhaustiveMatch(inputType, checkedVar, checkedInl, checkedInr);
 
         return outerExpected != null ? outerExpected : inferredReturnType;
       }
 
-      @Override
-      public Type visit(org.syntax.stella.Absyn.List p, Context ctx) {
-        Type currentExpected = ctx.getCurrentExpectedType();
-        if (currentExpected != null && !(currentExpected instanceof org.syntax.stella.Absyn.TypeList)) {
-          throw new TypeCheckException(
-                  TypeCheckException.ErrorType.ERROR_UNEXPECTED_LIST,
-                  "Expected type " + currentExpected + " but found a list."
-          );
-        }
-
-        Type elementType = null;
-        org.syntax.stella.Absyn.TypeList expectedListType =
-                (org.syntax.stella.Absyn.TypeList) currentExpected;
-
-        if (expectedListType != null) {
-          elementType = expectedListType.type_;
-        }
-
-        if (p.listexpr_.isEmpty()) {
-          if (elementType == null) {
+      private void checkForExhaustiveMatch(
+              Type inputType, boolean checkedVar, boolean checkedInl,
+              boolean checkedInr) {
+        if (inputType instanceof TypeSum) {
+          if (!checkedVar && (!checkedInl || !checkedInr)) {
             throw new TypeCheckException(
-                    TypeCheckException.ErrorType.ERROR_AMBIGUOUS_LIST_TYPE,
-                    "Cannot infer type for an empty list without context."
+                    TypeCheckException.ErrorType.ERROR_NONEXHAUSTIVE_MATCH_PATTERNS,
+                    "Non-exhaustive patterns in match expression. " +
+                            "Missing: " + (!checkedInl ? "inl " : "") + (!checkedInr ? "inr" : "")
             );
           }
-          return expectedListType;
         }
+      }
 
-        Type oldExpected = currentExpected;
+      private void checkThatMatchCasesExist(Match p) {
+        if (p.listmatchcase_.isEmpty()) {
+          throw new TypeCheckException(
+                  TypeCheckException.ErrorType.ERROR_ILLEGAL_EMPTY_MATCHING,
+                  "Match expression cannot be empty"
+          );
+        }
+      }
+
+      /**
+       * пытаемся вывести тип элементов:
+       * - если контекст ожидает List, то используем его
+       * - иначе null, и будем выводить по элементам
+       * - еслси список пустой и сверху пусто, то кидаем ошибку
+       *
+       * @param p
+       * @param ctx
+       * @return
+       */
+      @Override
+      public Type visit(org.syntax.stella.Absyn.List p, Context ctx) {
+        Type expectedElementType;
+
+        expectedElementType = tryToInferListTypeFromAbove(ctx);
+
+        checkForTypeAmbiguityForEmptyList(p, expectedElementType);
+        Type finalElementType = expectedElementType;
 
         for (org.syntax.stella.Absyn.Expr expr : p.listexpr_) {
-          ctx.pushExpectedType(elementType);
-
-          Type currentItemType = expr.accept(this, ctx);
-
+          ctx.pushExpectedType(finalElementType);
+          Type itemType = expr.accept(this, ctx);
           ctx.popExpectedType();
 
-          if (elementType == null) {
-            elementType = currentItemType;
+          if (finalElementType == null) {
+            finalElementType = itemType;
           } else {
-            checkForMismatch(elementType, currentItemType);
+            checkForMismatch(finalElementType, itemType);
           }
         }
 
-        if (oldExpected != null) {
-          ctx.pushExpectedType(oldExpected);
-        }
+        return new org.syntax.stella.Absyn.TypeList(finalElementType);
+      }
 
-        return new org.syntax.stella.Absyn.TypeList(elementType);
+      private Type tryToInferListTypeFromAbove(Context ctx) {
+        if (ctx.getCurrentExpectedType() instanceof TypeList tl) {
+          return tl;
+        } else if (ctx.getCurrentExpectedType() != null) {
+          throw new TypeCheckException(
+                  TypeCheckException.ErrorType.ERROR_UNEXPECTED_LIST,
+                  "Expected type " + ctx.getCurrentExpectedType() + " but found a list literal."
+          );
+        }
+        return null;
+      }
+
+      private void checkForTypeAmbiguityForEmptyList(
+              List p, Type expectedElementType) {
+        if (p.listexpr_.isEmpty() && expectedElementType == null) {
+          throw new TypeCheckException(
+                  TypeCheckException.ErrorType.ERROR_AMBIGUOUS_LIST_TYPE,
+                  "Cannot infer type for empty list [] without context."
+          );
+        }
       }
 
 
@@ -1053,19 +1117,8 @@ public class VisitTypeCheck {
               Context ctx) { /* Code for LogicOr goes here */
         var t1 = p.expr_1.accept(new ExprVisitor(), ctx);
         var t2 = p.expr_2.accept(new ExprVisitor(), ctx);
-        if (!(t1 instanceof TypeBool)) {
-
-          throw new TypeCheckException(
-                  TypeCheckException.ErrorType.ERROR_UNEXPECTED_TYPE_FOR_EXPRESSION,
-                  new TypeBool(), t1
-          );
-        }
-        if (!(t2 instanceof TypeBool)) {
-          throw new TypeCheckException(
-                  TypeCheckException.ErrorType.ERROR_UNEXPECTED_TYPE_FOR_EXPRESSION,
-                  new TypeBool(), t2
-          );
-        }
+        checkThatTypeIsBool(t1);
+        checkThatTypeIsBool(t2);
         return new TypeBool();
       }
 
@@ -1094,19 +1147,8 @@ public class VisitTypeCheck {
               Context ctx) { /* Code for LogicAnd goes here */
         var t1 = p.expr_1.accept(new ExprVisitor(), ctx);
         var t2 = p.expr_2.accept(new ExprVisitor(), ctx);
-        if (!(t1 instanceof TypeBool)) {
-
-          throw new TypeCheckException(
-                  TypeCheckException.ErrorType.ERROR_UNEXPECTED_TYPE_FOR_EXPRESSION,
-                  new TypeBool(), t1
-          );
-        }
-        if (!(t2 instanceof TypeBool)) {
-          throw new TypeCheckException(
-                  TypeCheckException.ErrorType.ERROR_UNEXPECTED_TYPE_FOR_EXPRESSION,
-                  new TypeBool(), t2
-          );
-        }
+        checkThatTypeIsBool(t1);
+        checkThatTypeIsBool(t2);
         return new TypeBool();
       }
 
@@ -1153,6 +1195,14 @@ public class VisitTypeCheck {
         return null;
       }
 
+      /**
+       * нам дано expr, stellaident. От expr мы хотим получить TypeRecord ->
+       * чекнуть что поле есть
+       *
+       * @param p
+       * @param ctx
+       * @return
+       */
       public Type visit(org.syntax.stella.Absyn.DotRecord p, Context ctx) {
         Type leftType = p.expr_.accept(new ExprVisitor(), ctx);
 
@@ -1192,8 +1242,11 @@ public class VisitTypeCheck {
 
       public Type visit(
               org.syntax.stella.Absyn.DotTuple p,
+
               Context ctx) { /* Code for DotTuple goes here */
+        ctx.pushExpectedType(null); // нужно?
         Type typeLeft = p.expr_.accept(new ExprVisitor(), ctx);
+        ctx.popExpectedType();
         TypeTuple tuple = checkThatTypeIsTypeTuple(typeLeft);
         int index = p.integer_;
         int size = tuple.listtype_.size();
@@ -1222,25 +1275,89 @@ public class VisitTypeCheck {
       }
 
       public Type visit(org.syntax.stella.Absyn.Tuple p, Context ctx) {
-        ListType componentTypes = new ListType();
-
-        for (org.syntax.stella.Absyn.Expr expr : p.listexpr_) {
-          Type type = expr.accept(new ExprVisitor(), ctx);
-          componentTypes.add(type);
+        Optional<TypeTuple> expectedTuple = Optional.empty();
+        if (ctx.getCurrentExpectedType() != null) {
+          if (ctx.getCurrentExpectedType() instanceof TypeTuple) {
+            expectedTuple = getExpectedTuple(p, ctx);
+          } else {
+            throw new TypeCheckException(
+                    TypeCheckException.ErrorType.ERROR_UNEXPECTED_TUPLE,
+                    "Expected " + ctx.getCurrentExpectedType() + " but got a tuple."
+            );
+          }
         }
+        ListType componentTypes = new ListType();
+        for (int i = 0; i < p.listexpr_.size(); i++) {
+          org.syntax.stella.Absyn.Expr expr = p.listexpr_.get(i);
 
+          /**
+           * если у нас есть ожидаемый тип кортежа сверху,
+           * то для соотв элемента мы прокидываем ожидаемый тип
+           *
+           */
+          if (expectedTuple.isPresent()) {
+            ctx.pushExpectedType(expectedTuple.get().listtype_.get(i));
+          } else {
+            ctx.pushExpectedType(null);
+          }
+
+          Type actualType = expr.accept(this, ctx);
+          componentTypes.add(actualType);
+
+          ctx.popExpectedType();
+        }
         return new TypeTuple(componentTypes);
       }
 
+      private Optional<TypeTuple> getExpectedTuple(Tuple p, Context ctx) {
+        Optional<TypeTuple> expectedTuple;
+        expectedTuple = validateTuple(p, ctx);
+        return expectedTuple;
+      }
+
+      private Optional<TypeTuple> validateTuple(Tuple p, Context ctx) {
+        Optional<TypeTuple> expectedTuple;
+        if (ctx.getCurrentExpectedType() instanceof TypeTuple et) {
+          expectedTuple = Optional.of(et);
+          ListType expectedComponentTypes = et.listtype_;
+          if (expectedComponentTypes.size() != p.listexpr_.size()) {
+            throw new TypeCheckException(
+                    TypeCheckException.ErrorType.ERROR_UNEXPECTED_TUPLE_LENGTH,
+                    "Expected tuple of size " + expectedComponentTypes.size() +
+                            " but got tuple of size " + p.listexpr_.size()
+            );
+          }
+        } else
+          throw new TypeCheckException(
+                  TypeCheckException.ErrorType.ERROR_UNEXPECTED_TUPLE,
+                  "Expected " + ctx.getCurrentExpectedType() + " but got a tuple."
+          );
+        return expectedTuple;
+      }
+
+      /**
+       * если нам прокинули сверху TypeRecord, то для каждого поля мы прокидываем ожидаемый тип
+       * то для каждого
+       *
+       * @param p
+       * @param ctx
+       * @return
+       */
       public Type visit(org.syntax.stella.Absyn.Record p, Context ctx) {
         org.syntax.stella.Absyn.ListRecordFieldType fieldTypes =
                 new org.syntax.stella.Absyn.ListRecordFieldType();
         java.util.Set<String> seenFields = new java.util.HashSet<>();
 
+        TypeRecord expectedRecord = null;
+        if (ctx.getCurrentExpectedType() != null) {
+          expectedRecord = chekIfExprectedTypeIsRecord(ctx);
+        }
+
         for (org.syntax.stella.Absyn.Binding binding : p.listbinding_) {
           org.syntax.stella.Absyn.ABinding b =
                   (org.syntax.stella.Absyn.ABinding) binding;
 
+          // чекаем кейс  {a=1, a=2}
           if (seenFields.contains(b.stellaident_)) {
             throw new TypeCheckException(
                     TypeCheckException.ErrorType.ERROR_DUPLICATE_RECORD_FIELDS,
@@ -1249,14 +1366,63 @@ public class VisitTypeCheck {
           }
           seenFields.add(b.stellaident_);
 
+          Type expectedFieldType = null;
+          if (expectedRecord != null) {
+            expectedFieldType =
+                    tryFindFieldTypeForRecord(
+                            expectedRecord, b.stellaident_).orElseThrow(
+                            () -> new TypeCheckException(
+                                    TypeCheckException.ErrorType.ERROR_UNEXPECTED_RECORD_FIELDS,
+                                    "Unexpected field '" + b.stellaident_ + "' in record construction."
+                            ));
+
+          }
+
+          ctx.pushExpectedType(expectedFieldType);
           Type fieldType = b.expr_.accept(new ExprVisitor(), ctx);
+          ctx.popExpectedType();
+
+          if (expectedFieldType != null) {
+            checkForMismatch(expectedFieldType, fieldType);
+          }
 
           fieldTypes.add(
                   new org.syntax.stella.Absyn.ARecordFieldType(
                           b.stellaident_, fieldType));
         }
 
-        return new org.syntax.stella.Absyn.TypeRecord(fieldTypes);
+        TypeRecord actualType =
+                new org.syntax.stella.Absyn.TypeRecord(fieldTypes);
+        if (expectedRecord != null) {
+          checkRecordMismatch(expectedRecord, actualType);
+        }
+
+        return actualType;
+      }
+
+      private TypeRecord chekIfExprectedTypeIsRecord(Context ctx) {
+        TypeRecord expectedRecord;
+        if (ctx.getCurrentExpectedType() instanceof TypeRecord tr) {
+          expectedRecord = tr;
+        } else {
+          throw new TypeCheckException(
+                  TypeCheckException.ErrorType.ERROR_UNEXPECTED_RECORD,
+                  "Expected type " + ctx.getCurrentExpectedType() + " but found a record."
+          );
+        }
+        return expectedRecord;
+      }
+
+      private Optional<Type> tryFindFieldTypeForRecord(
+              TypeRecord expectedRecord, String stellaident_) {
+        for (RecordFieldType f : expectedRecord.listrecordfieldtype_) {
+          if (f instanceof ARecordFieldType arft) {
+            if (arft.stellaident_.equals(stellaident_)) {
+              return Optional.of(arft.type_);
+            }
+          }
+        }
+        return Optional.empty();
       }
 
       public org.syntax.stella.Absyn.TypeList checkThatTypeIsList(Type type) {
@@ -1279,73 +1445,64 @@ public class VisitTypeCheck {
        */
       @Override
       public Type visit(org.syntax.stella.Absyn.ConsList p, Context ctx) {
-        Type currentExpected = ctx.getCurrentExpectedType();
-        if (currentExpected != null && !(currentExpected instanceof org.syntax.stella.Absyn.TypeList)) {
-          throw new TypeCheckException(
-                  TypeCheckException.ErrorType.ERROR_UNEXPECTED_LIST,
-                  "Expected type " + currentExpected + ", but found a list construction (cons)."
-          );
-        }
+        Type expectedElementType = null;
 
-        Type elementType = null;
-        if (currentExpected != null) {
-          elementType =
-                  ((org.syntax.stella.Absyn.TypeList) currentExpected).type_;
-        }
+        expectedElementType =
+                tryToGetElementTypeFromAbove(ctx, expectedElementType);
 
-        Type previousExpected = currentExpected;
-        if (elementType != null) {
-          ctx.pushExpectedType(elementType);
-        }
+        Type headType = checkHead(p, ctx, expectedElementType);
 
-        Type headType = checkHead(p, ctx);
-
-        if (elementType == null) {
-          elementType = headType;
+        if (expectedElementType == null) {
+          expectedElementType = headType;
         } else {
-          checkForMismatch(elementType, headType);
+          checkForMismatch(expectedElementType, headType);
         }
 
-        org.syntax.stella.Absyn.TypeList listType =
-                new org.syntax.stella.Absyn.TypeList(elementType);
+        org.syntax.stella.Absyn.TypeList expectedTailType =
+                new org.syntax.stella.Absyn.TypeList(expectedElementType);
 
-        ctx.pushExpectedType(listType);
-        Type tailType = checkList(p, ctx);
+        Type tailType = checkTail(p, ctx, expectedTailType);
 
-        checkForMismatch(listType, tailType);
+        checkForMismatch(expectedTailType, tailType);
 
-        ctx.popExpectedType(); // pop listType
-
-        if (elementType != null) {
-          ctx.popExpectedType(); // pop elementType
-        }
-
-        if (previousExpected != null) {
-          ctx.pushExpectedType(previousExpected);
-        }
-
-        return listType;
+        return expectedTailType;
       }
 
-      private Type checkList(ConsList p, Context ctx) {
+      private Type tryToGetElementTypeFromAbove(
+              Context ctx, Type expectedElementType) {
+        if (ctx.getCurrentExpectedType() instanceof TypeList tl) {
+          expectedElementType = tl.type_;
+        } else if (ctx.getCurrentExpectedType() != null) {
+          throw new TypeCheckException(
+                  TypeCheckException.ErrorType.ERROR_UNEXPECTED_LIST,
+                  "Expected type " + ctx.getCurrentExpectedType() + " but found cons construction."
+          );
+        }
+        return expectedElementType;
+      }
+
+      private Type checkTail(
+              ConsList p, Context ctx, TypeList expectedTailType) {
+        ctx.pushExpectedType(expectedTailType);
         Type tailType = p.expr_2.accept(this, ctx);
+        ctx.popExpectedType();
         return tailType;
       }
 
-      private Type checkHead(ConsList p, Context ctx) {
+      private Type checkHead(
+              ConsList p, Context ctx, Type expectedElementType) {
+        ctx.pushExpectedType(expectedElementType);
         Type headType = p.expr_1.accept(this, ctx);
+        ctx.popExpectedType();
         return headType;
       }
 
+
       @Override
       public Type visit(org.syntax.stella.Absyn.Head p, Context ctx) {
-        Type oldExpected = ctx.popExpectedType();
-
+        ctx.pushExpectedType(null);
         Type listExprType = p.expr_.accept(this, ctx);
-
-        if (oldExpected != null) {
-          ctx.pushExpectedType(oldExpected);
-        }
+        ctx.popExpectedType();
 
         org.syntax.stella.Absyn.TypeList listType =
                 checkThatTypeIsList(listExprType);
@@ -1355,13 +1512,9 @@ public class VisitTypeCheck {
 
       @Override
       public Type visit(org.syntax.stella.Absyn.IsEmpty p, Context ctx) {
-        Type oldExpected = ctx.popExpectedType();
-
+        ctx.pushExpectedType(null);
         Type listExprType = p.expr_.accept(this, ctx);
-
-        if (oldExpected != null) {
-          ctx.pushExpectedType(oldExpected);
-        }
+        ctx.popExpectedType();
 
         checkThatTypeIsList(listExprType);
 
@@ -1370,18 +1523,11 @@ public class VisitTypeCheck {
 
       @Override
       public Type visit(org.syntax.stella.Absyn.Tail p, Context ctx) {
-        Type oldExpected = ctx.popExpectedType();
-
+        ctx.pushExpectedType(null);
         Type listExprType = p.expr_.accept(this, ctx);
+        ctx.popExpectedType();
 
-        if (oldExpected != null) {
-          ctx.pushExpectedType(oldExpected);
-        }
-
-        org.syntax.stella.Absyn.TypeList listType =
-                checkThatTypeIsList(listExprType);
-
-        return listType;
+        return checkThatTypeIsList(listExprType);
       }
 
       public Type visit(
@@ -1429,12 +1575,8 @@ public class VisitTypeCheck {
               org.syntax.stella.Absyn.Inl p,
               Context ctx) { /* Code for Inl goes here */
         Type currentExpected = ctx.getCurrentExpectedType();
-        if (!(currentExpected instanceof TypeSum ts)) {
-          throw new TypeCheckException(
-                  TypeCheckException.ErrorType.ERROR_UNEXPECTED_INJECTION,
-                  "Expected a sum type for Inl but got: " + currentExpected
-          );
-        }
+        checkForAmbiguousSumType(currentExpected);
+        TypeSum ts = checkThatExpectSumType(currentExpected);
         ctx.pushExpectedType(ts.type_1);
         var t1 = p.expr_.accept(new ExprVisitor(), ctx);
         ctx.popExpectedType();
@@ -1446,18 +1588,37 @@ public class VisitTypeCheck {
               org.syntax.stella.Absyn.Inr p,
               Context ctx) { /* Code for Inr goes here */
         Type currentExpected = ctx.getCurrentExpectedType();
-        if (!(currentExpected instanceof TypeSum ts)) {
-          throw new TypeCheckException(
-                  TypeCheckException.ErrorType.ERROR_UNEXPECTED_INJECTION,
-                  "Expected a sum type for Inr but got: " + currentExpected
-          );
-        }
+        checkForAmbiguousSumType(currentExpected);
+        TypeSum ts = checkThatExpectSumType(currentExpected);
         ctx.pushExpectedType(ts.type_2);
         var t1 = p.expr_.accept(new ExprVisitor(), ctx);
         ctx.popExpectedType();
         checkForMismatch(t1, ts.type_2);
         return currentExpected;
       }
+
+
+
+      private void checkForAmbiguousSumType(Type currentExpected) {
+        if (currentExpected == null) {
+          throw new TypeCheckException(
+                  TypeCheckException.ErrorType.ERROR_AMBIGUOUS_SUM_TYPE,
+                  "Cannot infer type for 'inl' injection without context. " +
+                          "Use type ascription: inl(...) as (Type1 + Type2)"
+          );
+        }
+      }
+
+      private TypeSum checkThatExpectSumType(Type currentExpected) {
+        if (!(currentExpected instanceof TypeSum ts)) {
+          throw new TypeCheckException(
+                  TypeCheckException.ErrorType.ERROR_UNEXPECTED_INJECTION,
+                  "Expected a sum type for Inl but got: " + currentExpected
+          );
+        }
+        return ts;
+      }
+
 
       public Type visit(
               org.syntax.stella.Absyn.Succ p,
@@ -1471,12 +1632,7 @@ public class VisitTypeCheck {
               org.syntax.stella.Absyn.LogicNot p,
               Context ctx) { /* Code for LogicNot goes here */
         var t1 = p.expr_.accept(new ExprVisitor(), ctx);
-        if (!(t1 instanceof TypeBool)) {
-          throw new TypeCheckException(
-                  TypeCheckException.ErrorType.ERROR_UNEXPECTED_TYPE_FOR_EXPRESSION,
-                  new TypeBool(), t1
-          );
-        }
+        checkThatTypeIsBool(t1);
         return new TypeBool();
       }
 
@@ -1502,7 +1658,7 @@ public class VisitTypeCheck {
       public Type visit(org.syntax.stella.Absyn.Fix p, Context ctx) {
         /**
          * если нам сверху сказали, что fix должен вернуть тип T, то
-         * функция, которую мы передаем в fix, должна быть типа T -> T
+         * функция, которую мы передаем в fix (expr), должна быть типа T -> T
          */
         Type expectedT = ctx.getCurrentExpectedType();
         if (expectedT != null) {
@@ -1652,9 +1808,17 @@ public class VisitTypeCheck {
     public class PatternBindingVisitor implements org.syntax.stella.Absyn.PatternBinding.Visitor<Type, Context> {
       public Type visit(
               org.syntax.stella.Absyn.APatternBinding p,
-              Context ctx) { /* Code for APatternBinding goes here */
+              Context ctx) {
+
+        // сначала infer правую часть (expr)
+        ctx.pushExpectedType(null);
+        Type exprType = p.expr_.accept(new ExprVisitor(), ctx);
+        ctx.popExpectedType();
+        // затем чекнем левую часть с этим типом
+        ctx.pushExpectedType(exprType);
         p.pattern_.accept(new PatternVisitor(), ctx);
-        p.expr_.accept(new ExprVisitor(), ctx);
+        ctx.popExpectedType();
+
         return null;
       }
     }
