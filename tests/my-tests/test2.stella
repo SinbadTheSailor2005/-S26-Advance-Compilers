@@ -1,60 +1,18 @@
 language core;
+extend with #variants, #unit-type;
 
+type Color = <| red : Unit, green : Unit, blue : Unit |>
 
-
-// 1. Определение вариантного типа (TypeVariant, AVariantFieldType)
-// Ошибка 32: ERROR_DUPLICATE_VARIANT_TYPE_FIELDS (если метки совпадут)
-type MyVariant = <| red : Unit, green : Nat, blue : Bool |>
-
-// 2. Функция с использованием рекурсии через fix (Fix)
-// Ошибка 6: ERROR_NOT_A_FUNCTION (если в fix передать не функцию)
-fn factorial(n : Nat) -> Nat {
-  return fix(fn(f : fn(Nat) -> Nat) {
-    return fn(x : Nat) {
-      return if Nat::iszero(x)
-             then succ(0)
-             else succ(f(Nat::pred(x))) // Упрощенно для примера
-    }
-  })(n)
+fn get_hex(c : Color) -> Nat {
+  return match c {
+      <| red   = u |> => 1
+    | <| green = u |> => 2
+    | <| blue  = u |> => 3
+  }
 }
 
-
-// 3. Работа со списками, записями и суммами
-fn complex_logic(x : Nat) -> {Nat, Bool} {
-  return let p = {succ(x), Nat::iszero(x)} in // Let, Tuple
-         let list = [x, succ(x)] in           // List (TypeList)
-         let record = { name = x, flag = true } in // Record (TypeRecord)
-
-         // Пример Match и Sum Types (Inl/Inr)
-         // Ошибка 24: ERROR_AMBIGUOUS_SUM_TYPE (если тип не выведен)
-         let s = (inl(x) as (Nat + Bool)) in
-
-         match s {
-           inl(val) => {val, true} // AMatchCase, PatternInl
-         | inr(b)   => {0, b}      // PatternInr
-         }
-}
-// 4. Главная функция (обязательна: ERROR_MISSING_MAIN)
-// Должна иметь тип fn(T) -> T (обычно Nat -> Nat или Nat -> Unit)
-fn main(input : Nat) -> Nat {
-  return
-    // Type Ascription (TypeAsc)
-    (let unit_val = unit in // ConstUnit
-
-    // Работа с записями (DotRecord)
-    // Ошибка 19: ERROR_UNEXPECTED_FIELD_ACCESS
-    let r = { a = input, b = unit } in
-    let val = r.a in
-
-    // Работа с вариантами (Variant)
-    // Ошибка 20: ERROR_UNEXPECTED_VARIANT_LABEL
-    let v = <| green = input |> as MyVariant in
-
-    match v {
-      <| red = u |>   => 0
-    | <| green = n |> => n
-    | <| blue = b |>  => if b then 1 else 0
-    } // Ошибка 28: ERROR_NONEXHAUSTIVE_MATCH_PATTERNS
-
-    ) as Nat
+fn main(n : Nat) -> Nat {
+  return                     // <--- Сначала return
+    let myColor = <| red = unit |> as Color in
+    get_hex(myColor)         // <--- Результат let-выражения
 }

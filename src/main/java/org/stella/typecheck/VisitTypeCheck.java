@@ -5,6 +5,7 @@ package org.stella.typecheck;
 import org.stella.typecheck.exceptions.TypeCheckException;
 import org.syntax.stella.Absyn.*;
 
+import java.nio.file.OpenOption;
 import java.util.Optional;
 
 /*** Visitor Design Pattern Skeleton. ***/
@@ -17,6 +18,18 @@ import java.util.Optional;
 
 public class VisitTypeCheck {
 
+
+  public static Optional<AVariantFieldType> getAVariantFieldType(
+          String  stellaident_, TypeVariant typeVariant) {
+    for (VariantFieldType f : typeVariant.listvariantfieldtype_) {
+      AVariantFieldType af = (AVariantFieldType) f;
+      if (af.stellaident_.equals(stellaident_)) {
+        return Optional.of(af);
+
+      }
+    }
+    return Optional.empty();
+  }
   public static boolean isSameType(Type t1, Type t2) {
     if (t1 == null || t2 == null) return false;
     if (t1 instanceof TypeAuto || t2 instanceof TypeAuto) return true;
@@ -168,15 +181,52 @@ public class VisitTypeCheck {
             org.syntax.stella.Absyn.Type expected,
             org.syntax.stella.Absyn.Type actual) {
       if (isSameType(expected, actual)) return;
-      if (expected instanceof org.syntax.stella.Absyn.TypeRecord expectedRecord && actual instanceof org.syntax.stella.Absyn.TypeRecord actualRecord) {
+
+      if (expected instanceof org.syntax.stella.Absyn.TypeRecord expectedRecord &&
+              actual instanceof org.syntax.stella.Absyn.TypeRecord actualRecord) {
         checkRecordMismatch(expectedRecord, actualRecord);
+        return;
       }
 
+      if (expected instanceof org.syntax.stella.Absyn.TypeVariant expectedVariant &&
+              actual instanceof org.syntax.stella.Absyn.TypeVariant actualVariant) {
+        checkVariantMismatch(expectedVariant, actualVariant);
+        return;
+      }
 
       throw new TypeCheckException(
               TypeCheckException.ErrorType.ERROR_UNEXPECTED_TYPE_FOR_EXPRESSION,
               expected, actual
       );
+    }
+
+    public static void checkVariantMismatch(
+            org.syntax.stella.Absyn.TypeVariant expected,
+            org.syntax.stella.Absyn.TypeVariant actual) {
+
+      java.util.Set<String> expectedLabels = new java.util.HashSet<>();
+      for (org.syntax.stella.Absyn.VariantFieldType f : expected.listvariantfieldtype_) {
+        expectedLabels.add(((org.syntax.stella.Absyn.AVariantFieldType) f).stellaident_);
+      }
+
+      java.util.Set<String> actualLabels = new java.util.HashSet<>();
+      for (org.syntax.stella.Absyn.VariantFieldType f : actual.listvariantfieldtype_) {
+        actualLabels.add(((org.syntax.stella.Absyn.AVariantFieldType) f).stellaident_);
+      }
+
+      java.util.List<String> missing = new java.util.ArrayList<>();
+      for (String label : expectedLabels) {
+        if (!actualLabels.contains(label)) {
+          missing.add(label);
+        }
+      }
+
+      if (!missing.isEmpty()) {
+        throw new TypeCheckException(
+                TypeCheckException.ErrorType.ERROR_MISSING_VARIANT_LABELS,
+                "Variant type is missing required labels: " + String.join(", ", missing)
+        );
+      }
     }
 
 
@@ -434,8 +484,7 @@ public class VisitTypeCheck {
           }
           labels.add(field.stellaident_);
 
-          field.optionaltyping_.accept(new OptionalTypingVisitor(), ctx); //
-          // TODO: что это?
+          field.accept(new VariantFieldTypeVisitor(), ctx);
         }
         return p;
       }
@@ -520,15 +569,15 @@ public class VisitTypeCheck {
     public class OptionalTypingVisitor implements org.syntax.stella.Absyn.OptionalTyping.Visitor<Type, Context> {
       public Type visit(
               org.syntax.stella.Absyn.NoTyping p,
-              Context ctx) { /* Code for NoTyping goes here */
-        return null;
+              Context ctx) {
+        return new org.syntax.stella.Absyn.TypeUnit();
       }
 
       public Type visit(
               org.syntax.stella.Absyn.SomeTyping p,
-              Context ctx) { /* Code for SomeTyping goes here */
+              Context ctx) {
         p.type_.accept(new TypeVisitor(), ctx);
-        return null;
+        return p.type_;
       }
     }
 
@@ -579,12 +628,35 @@ public class VisitTypeCheck {
         return null;
       }
 
-      public Type visit(
-              org.syntax.stella.Absyn.PatternVariant p,
-              Context ctx) { /* Code for PatternVariant goes here */
+      @Override
+      public Type visit(org.syntax.stella.Absyn.PatternVariant p, Context ctx) {
+        Type expectedType = ctx.getCurrentExpectedType();
 
-        p.patterndata_.accept(new PatternDataVisitor(), ctx);
-        return null;
+        if (!(expectedType instanceof TypeVariant typeVariant)) {
+          throw new TypeCheckException(
+                  TypeCheckException.ErrorType.ERROR_UNEXPECTED_PATTERN_FOR_TYPE,
+                  "Expected variant type, but got: " + expectedType
+          );
+        }
+
+        org.syntax.stella.Absyn.AVariantFieldType field =
+                getAVariantFieldType(p.stellaident_, typeVariant).orElseThrow(() ->  new TypeCheckException(
+                        TypeCheckException.ErrorType.ERROR_UNEXPECTED_VARIANT_LABEL,
+                        "Label '" + p.stellaident_ + "' is not defined in expected type "
+                ));
+
+
+        Type fieldContentType = field.optionaltyping_.accept(new OptionalTypingVisitor(), ctx);
+
+        if (p.patterndata_ instanceof org.syntax.stella.Absyn.SomePatternData somePat) {
+          ctx.pushExpectedType(fieldContentType);
+          somePat.accept(new PatternDataVisitor(), ctx);
+          ctx.popExpectedType();
+        } else {
+          checkForMismatch(fieldContentType, new org.syntax.stella.Absyn.TypeUnit());
+        }
+
+        return expectedType;
       }
 
       public Type visit(
@@ -931,12 +1003,60 @@ public class VisitTypeCheck {
         }
       }
 
-      public Type visit(
-              org.syntax.stella.Absyn.Variant p,
-              Context ctx) { /* Code for Variant goes here */
+      @Override
+      public Type visit(org.syntax.stella.Absyn.Variant p, Context ctx) {
+        checkForAmbiguousVariantType(p, ctx.getCurrentExpectedType());
+        TypeVariant typeVariant = checkThatWeExpectVariantTypeFromAbove(ctx);
 
-        p.exprdata_.accept(new ExprDataVisitor(), ctx);
-        return null;
+        org.syntax.stella.Absyn.AVariantFieldType field =
+                getAVariantFieldType(p.stellaident_, typeVariant).orElseThrow(() ->  new TypeCheckException(
+                        TypeCheckException.ErrorType.ERROR_UNEXPECTED_VARIANT_LABEL,
+                        "Label '" + p.stellaident_ + "' is not defined in expected type "
+                ));
+        Type fieldType = field.optionaltyping_.accept(new OptionalTypingVisitor(), ctx);
+
+        if (p.exprdata_ instanceof org.syntax.stella.Absyn.SomeExprData data) {
+          ctx.pushExpectedType(fieldType);
+          Type actualType = data.expr_.accept(this, ctx);
+          ctx.popExpectedType();
+          checkForMismatch(fieldType, actualType);
+        } else {
+          checkForMismatch(fieldType, new org.syntax.stella.Absyn.TypeUnit());
+        }
+
+        return typeVariant;
+      }
+
+
+
+      private void checkLabelExistanceInVariant(
+              Variant p, AVariantFieldType field, TypeVariant typeVariant) {
+        if (field == null) {
+          throw new TypeCheckException(
+                  TypeCheckException.ErrorType.ERROR_UNEXPECTED_VARIANT_LABEL,
+                  "Label '" + p.stellaident_ + "' not found in type " + typeVariant
+          );
+        }
+      }
+
+      public TypeVariant checkThatWeExpectVariantTypeFromAbove(Context ctx) {
+        if (!(ctx.getCurrentExpectedType() instanceof TypeVariant typeVariant)) {
+          throw new TypeCheckException(
+                  TypeCheckException.ErrorType.ERROR_UNEXPECTED_VARIANT,
+                  "Expected type " + ctx.getCurrentExpectedType() + " but found variant construction."
+          );
+        }
+        return typeVariant;
+      }
+
+      public void checkForAmbiguousVariantType(Variant p, Type expected) {
+        if (expected == null) {
+          throw new TypeCheckException(
+                  TypeCheckException.ErrorType.ERROR_AMBIGUOUS_VARIANT_TYPE,
+                  "Cannot infer type for variant <| " + p.stellaident_ + " ... |>. " +
+                          "Expected type is missing."
+          );
+        }
       }
 
       /**
@@ -1598,7 +1718,6 @@ public class VisitTypeCheck {
       }
 
 
-
       private void checkForAmbiguousSumType(Type currentExpected) {
         if (currentExpected == null) {
           throw new TypeCheckException(
@@ -1824,12 +1943,8 @@ public class VisitTypeCheck {
     }
 
     public class VariantFieldTypeVisitor implements org.syntax.stella.Absyn.VariantFieldType.Visitor<Type, Context> {
-      public Type visit(
-              org.syntax.stella.Absyn.AVariantFieldType p,
-              Context ctx) { /* Code for AVariantFieldType goes here */
-
-        p.optionaltyping_.accept(new OptionalTypingVisitor(), ctx);
-        return null;
+      public Type visit(org.syntax.stella.Absyn.AVariantFieldType p, Context ctx) {
+        return p.optionaltyping_.accept(new OptionalTypingVisitor(), ctx);
       }
     }
 
@@ -1843,12 +1958,18 @@ public class VisitTypeCheck {
     }
 
     public class TypingVisitor implements org.syntax.stella.Absyn.Typing.Visitor<Type, Context> {
-      public Type visit(
-              org.syntax.stella.Absyn.ATyping p,
-              Context ctx) { /* Code for ATyping goes here */
-        p.expr_.accept(new ExprVisitor(), ctx);
-        p.type_.accept(new TypeVisitor(), ctx);
-        return null;
+      public Type visit(org.syntax.stella.Absyn.ATyping p, Context ctx) {
+        Type expectedType = p.type_.accept(new TypeVisitor(), ctx);
+
+        ctx.pushExpectedType(expectedType);
+
+        Type actualType = p.expr_.accept(new ExprVisitor(), ctx);
+
+        ctx.popExpectedType();
+
+        checkForMismatch(expectedType, actualType);
+
+        return actualType;
       }
     }
   }
