@@ -25,3 +25,4 @@ fn main(n : Nat) -> Nat {
   return square(n);
 }
 
+// Error: ERROR_UNEXPECTED_TYPE_FOR_EXPRESSION

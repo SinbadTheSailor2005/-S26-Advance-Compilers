@@ -31,36 +31,3 @@ fn factorial(n : Nat) -> Nat {
 fn main(n : Nat) -> Nat {
   return factorial(n);
 }
-// Ожидает функцию типа fn(Nat) -> Bool
-fn applyToZero(callback : fn(Nat) -> Bool) -> Bool {
-  return callback(0)
-}
-
-fn main(n : Nat) -> Bool {
-  // ОШИБКА ЗДЕСЬ:
-  // Мы передаем анонимную функцию, которая говорит "я принимаю Bool",
-  // хотя applyToZero требует функцию, принимающую Nat.
-  return applyToZero(fn(x : Bool) {
-    return if x then false else true
-  })
-}
-
-
-
-
-// Функция пытается уменьшить число на 1
-fn safe_pred(n : Nat) -> Nat + Unit {
-  return if Nat::iszero(n) then
-    // 0 не имеет предшественника -> Возвращаем "Ошибку" (правую часть)
-    inr(unit)
-  else
-    // n > 0 -> Возвращаем результат (левую часть)
-    inl(Nat::pred(n))
-}
-
-fn main(n : Nat) -> Nat {
-  return match safe_pred(n) {
-      inl(val) => val
-    | inr(u)   => 0
-  }
-}

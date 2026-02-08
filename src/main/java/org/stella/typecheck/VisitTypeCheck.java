@@ -1287,7 +1287,9 @@ public class VisitTypeCheck {
       }
 
       public Type visit(org.syntax.stella.Absyn.Application p, Context ctx) {
+        ctx.pushExpectedType(null);
         var t1 = p.expr_.accept(new ExprVisitor(), ctx);
+        ctx.popExpectedType();
         checkThatTypeIsTypeFun(t1);
 
         TypeFun funType = (TypeFun) t1;
@@ -1805,39 +1807,35 @@ public class VisitTypeCheck {
         if (!(inferredType instanceof TypeFun funType)) {
           throw new TypeCheckException(
                   TypeCheckException.ErrorType.ERROR_NOT_A_FUNCTION,
-                  "Expected a function type for fixpoint combinator but got: " + inferredType
+                  "Expected a function type  but got: " + inferredType
           );
         }
         return funType;
       }
 
-      public Type visit(
-              org.syntax.stella.Absyn.NatRec p,
-              Context ctx) { /* Code for NatRec goes here */
-
-        var t1 = p.expr_1.accept(new ExprVisitor(), ctx); // n
-        var t2 = p.expr_2.accept(new ExprVisitor(), ctx); // z (Initial value)
-        var t3 = p.expr_3.accept(new ExprVisitor(), ctx); // s (Step function)
-
-        checkThatReturnTypeIsAFunctionThatReturnsFunction(t3);
+      public Type visit(org.syntax.stella.Absyn.NatRec p, Context ctx) {
+        ctx.pushExpectedType(new TypeNat());
+        var t1 = p.expr_1.accept(new ExprVisitor(), ctx);
+        ctx.popExpectedType();
         checkThatTypeIsNat(t1);
-        Type T = t2;
 
-        // expected fn(Nat) -> (fn(T) -> T)
-
-        // fn(T) -> T
+        var t2 = p.expr_2.accept(new ExprVisitor(), ctx);
         ListType innerParamTypes = new ListType();
-        innerParamTypes.add(T);
-        TypeFun innerFunType = new TypeFun(innerParamTypes, T);
+        innerParamTypes.add(t2);
+        TypeFun innerFunType = new TypeFun(innerParamTypes, t2);
 
-        // fn(Nat) -> InnerFun
         ListType outerParamTypes = new ListType();
         outerParamTypes.add(new TypeNat());
         Type expectedStepType = new TypeFun(outerParamTypes, innerFunType);
 
+
+        ctx.pushExpectedType(expectedStepType);
+        var t3 = p.expr_3.accept(new ExprVisitor(), ctx);
+        ctx.popExpectedType();
+
         checkForMismatch(expectedStepType, t3);
 
-        return T;
+        return t2;
       }
 
 

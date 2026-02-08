@@ -55,7 +55,7 @@ public class Main
         try
         {
             Program ast = t.parse();
-            System.out.println("Pretty printed program:");
+//            System.out.println("Pretty printed program:");
 //            System.out.println(PrettyPrinter.print(ast));
 
             TypeCheck.typecheckProgram(ast);

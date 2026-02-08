@@ -15,7 +15,7 @@ public class TypeCheck
             information*/);
             System.exit(0);
         } catch (TypeCheckException e) {
-            System.out.println(e.getMessage());
+            System.err.println(e.getMessage());
             System.exit(1);
         }
     }
