@@ -5,7 +5,6 @@ package org.stella.typecheck;
 import org.stella.typecheck.exceptions.TypeCheckException;
 import org.syntax.stella.Absyn.*;
 
-import java.nio.file.OpenOption;
 import java.util.Optional;
 
 /*** Visitor Design Pattern Skeleton. ***/
@@ -170,9 +169,7 @@ public class VisitTypeCheck {
       public Type visit(
               org.syntax.stella.Absyn.AnExtension p,
               Context ctx) { /* Code for AnExtension goes here */
-        for (String x : p.listextensionname_) {
-
-        }
+        // Extensions are ignored in this typechecker implementation.
         return null;
       }
     }
@@ -341,9 +338,7 @@ public class VisitTypeCheck {
           x.accept(new AnnotationVisitor(), ctx);
         }
 
-        for (String x : p.liststellaident_) {
-
-        }
+        // Generic type variables are tracked implicitly by the parser/AST; no action here.
         for (org.syntax.stella.Absyn.ParamDecl x : p.listparamdecl_) {
           x.accept(new ParamDeclVisitor(), ctx);
         }
@@ -635,7 +630,7 @@ public class VisitTypeCheck {
         if (!(expectedType instanceof TypeVariant typeVariant)) {
           throw new TypeCheckException(
                   TypeCheckException.ErrorType.ERROR_UNEXPECTED_PATTERN_FOR_TYPE,
-                  "Expected variant type, but got: " + expectedType
+                  "Expected variant type, but got: " + TypePretty.pretty(expectedType)
           );
         }
 
@@ -643,6 +638,7 @@ public class VisitTypeCheck {
                 getAVariantFieldType(p.stellaident_, typeVariant).orElseThrow(() ->  new TypeCheckException(
                         TypeCheckException.ErrorType.ERROR_UNEXPECTED_VARIANT_LABEL,
                         "Label '" + p.stellaident_ + "' is not defined in expected type "
+                                + TypePretty.pretty(typeVariant)
                 ));
 
 
@@ -666,7 +662,7 @@ public class VisitTypeCheck {
         if (!(currentExpected instanceof org.syntax.stella.Absyn.TypeSum sumType)) {
           throw new TypeCheckException(
                   TypeCheckException.ErrorType.ERROR_UNEXPECTED_PATTERN_FOR_TYPE,
-                  "Pattern 'inl' requires a Sum type, but got: " + currentExpected
+                  "Pattern 'inl' requires a Sum type, but got: " + TypePretty.pretty(currentExpected)
           );
         }
         ctx.pushExpectedType(sumType.type_1);
@@ -682,7 +678,7 @@ public class VisitTypeCheck {
         if (!(currentExpected instanceof org.syntax.stella.Absyn.TypeSum sumType)) {
           throw new TypeCheckException(
                   TypeCheckException.ErrorType.ERROR_UNEXPECTED_PATTERN_FOR_TYPE,
-                  "Pattern 'inl' requires a Sum type, but got: " + currentExpected
+                  "Pattern 'inr' requires a Sum type, but got: " + TypePretty.pretty(currentExpected)
           );
         }
         ctx.pushExpectedType(sumType.type_2);
@@ -830,9 +826,7 @@ public class VisitTypeCheck {
       public Type visit(
               org.syntax.stella.Absyn.TypeAbstraction p,
               Context ctx) { /* Code for TypeAbstraction goes here */
-        for (String x : p.liststellaident_) {
-
-        }
+        // Type abstraction (forall-intro) is not handled here.
         p.expr_.accept(new ExprVisitor(), ctx);
         return null;
       }
@@ -997,8 +991,8 @@ public class VisitTypeCheck {
         if (expected != null && !(expected instanceof TypeFun)) {
           throw new TypeCheckException(
                   TypeCheckException.ErrorType.ERROR_UNEXPECTED_LAMBDA,
-                  expected,
-                  null
+                  "Unexpected lambda: expected a function type in this context, but the expected type is "
+                          + TypePretty.pretty(expected) + "."
           );
         }
       }
@@ -1029,21 +1023,12 @@ public class VisitTypeCheck {
 
 
 
-      private void checkLabelExistanceInVariant(
-              Variant p, AVariantFieldType field, TypeVariant typeVariant) {
-        if (field == null) {
-          throw new TypeCheckException(
-                  TypeCheckException.ErrorType.ERROR_UNEXPECTED_VARIANT_LABEL,
-                  "Label '" + p.stellaident_ + "' not found in type " + typeVariant
-          );
-        }
-      }
-
       public TypeVariant checkThatWeExpectVariantTypeFromAbove(Context ctx) {
         if (!(ctx.getCurrentExpectedType() instanceof TypeVariant typeVariant)) {
           throw new TypeCheckException(
                   TypeCheckException.ErrorType.ERROR_UNEXPECTED_VARIANT,
-                  "Expected type " + ctx.getCurrentExpectedType() + " but found variant construction."
+                  "Expected type " + TypePretty.pretty(ctx.getCurrentExpectedType())
+                          + " but found variant construction."
           );
         }
         return typeVariant;
@@ -1194,7 +1179,8 @@ public class VisitTypeCheck {
         } else if (ctx.getCurrentExpectedType() != null) {
           throw new TypeCheckException(
                   TypeCheckException.ErrorType.ERROR_UNEXPECTED_LIST,
-                  "Expected type " + ctx.getCurrentExpectedType() + " but found a list literal."
+                  "Expected type " + TypePretty.pretty(ctx.getCurrentExpectedType())
+                          + " but found a list literal."
           );
         }
         return null;
@@ -1356,7 +1342,7 @@ public class VisitTypeCheck {
         if (!(leftType instanceof TypeRecord recordType)) {
           throw new TypeCheckException(
                   TypeCheckException.ErrorType.ERROR_NOT_A_RECORD,
-                  "Expected a record type but got: " + leftType
+                  "Expected a record type but got: " + TypePretty.pretty(leftType)
           );
         }
         return recordType;
@@ -1381,7 +1367,7 @@ public class VisitTypeCheck {
         if (!(typeLeft instanceof TypeTuple tuple)) {
           throw new TypeCheckException(
                   TypeCheckException.ErrorType.ERROR_NOT_A_TUPLE,
-                  "Expected a tuple type but got: " + typeLeft
+                  "Expected a tuple type but got: " + TypePretty.pretty(typeLeft)
           );
         }
         return tuple;
@@ -1404,7 +1390,7 @@ public class VisitTypeCheck {
           } else {
             throw new TypeCheckException(
                     TypeCheckException.ErrorType.ERROR_UNEXPECTED_TUPLE,
-                    "Expected " + ctx.getCurrentExpectedType() + " but got a tuple."
+                    "Expected " + TypePretty.pretty(ctx.getCurrentExpectedType()) + " but got a tuple."
             );
           }
         }
@@ -1529,7 +1515,8 @@ public class VisitTypeCheck {
         } else {
           throw new TypeCheckException(
                   TypeCheckException.ErrorType.ERROR_UNEXPECTED_RECORD,
-                  "Expected type " + ctx.getCurrentExpectedType() + " but found a record."
+                  "Expected type " + TypePretty.pretty(ctx.getCurrentExpectedType())
+                          + " but found a record."
           );
         }
         return expectedRecord;
@@ -1551,7 +1538,7 @@ public class VisitTypeCheck {
         if (!(type instanceof org.syntax.stella.Absyn.TypeList listType)) {
           throw new TypeCheckException(
                   TypeCheckException.ErrorType.ERROR_NOT_A_LIST,
-                  "Expected a list type but got: " + type
+                  "Expected a list type but got: " + TypePretty.pretty(type)
           );
         }
         return listType;
@@ -1597,7 +1584,8 @@ public class VisitTypeCheck {
         } else if (ctx.getCurrentExpectedType() != null) {
           throw new TypeCheckException(
                   TypeCheckException.ErrorType.ERROR_UNEXPECTED_LIST,
-                  "Expected type " + ctx.getCurrentExpectedType() + " but found cons construction."
+                  "Expected type " + TypePretty.pretty(ctx.getCurrentExpectedType())
+                          + " but found cons construction."
           );
         }
         return expectedElementType;
@@ -1734,7 +1722,7 @@ public class VisitTypeCheck {
         if (!(currentExpected instanceof TypeSum ts)) {
           throw new TypeCheckException(
                   TypeCheckException.ErrorType.ERROR_UNEXPECTED_INJECTION,
-                  "Expected a sum type for Inl but got: " + currentExpected
+                  "Expected a sum type for Inl but got: " + TypePretty.pretty(currentExpected)
           );
         }
         return ts;
@@ -1807,7 +1795,7 @@ public class VisitTypeCheck {
         if (!(inferredType instanceof TypeFun funType)) {
           throw new TypeCheckException(
                   TypeCheckException.ErrorType.ERROR_NOT_A_FUNCTION,
-                  "Expected a function type  but got: " + inferredType
+                  "Expected a function type but got: " + TypePretty.pretty(inferredType)
           );
         }
         return funType;
@@ -1844,16 +1832,6 @@ public class VisitTypeCheck {
           throw new TypeCheckException(
                   TypeCheckException.ErrorType.ERROR_UNEXPECTED_TYPE_FOR_EXPRESSION,
                   new TypeNat(), t1
-          );
-        }
-      }
-
-      private void checkThatReturnTypeIsAFunctionThatReturnsFunction(Type t3) {
-        if (!(t3 instanceof TypeFun tf && tf.type_ instanceof TypeFun)) {
-          throw new TypeCheckException(
-                  TypeCheckException.ErrorType.ERROR_NOT_A_FUNCTION,
-                  "Expected a function type for step function (3rd arg) but got: " + t3
-
           );
         }
       }

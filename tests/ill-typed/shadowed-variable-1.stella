@@ -18,4 +18,5 @@ fn main(n : Nat) -> Nat {
   return f(fn (x : Bool) { return if x then n else succ(n); })(0);
 }
 // Error: ERROR_NOT_A_FUNCTION
-  // Expected a function type  but got: org.syntax.stella.Absyn.TypeNat@25
+  // Expected a function type  but got: org.syntax.stella.Absyn.TypeNat@25//Unable
+///ERROR_NOT_A_FUNCTION

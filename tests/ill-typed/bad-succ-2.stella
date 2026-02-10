@@ -4,4 +4,5 @@ fn main(x : Nat) -> Nat {
     return succ(fn(x : Nat) { return 0; });
 }
 
-// Error: ERROR_UNEXPECTED_LAMBDA
+// Error: ERROR_UNEXPECTED_LAMBDA//Unable
+///ERROR_UNEXPECTED_LAMBDA

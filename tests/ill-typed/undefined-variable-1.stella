@@ -2,4 +2,5 @@ language core;
 
 fn main(x : Nat) -> Nat {
     return if y then 0 else succ(0);
-}
+}//Unable
+///ERROR_UNDEFINED_VARIABLE

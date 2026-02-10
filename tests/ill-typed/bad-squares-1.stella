@@ -27,3 +27,5 @@ fn main(n : Nat) -> Nat {
 
 
 // unexpected lamda?
+//Unable
+///ERROR_UNEXPECTED_LAMBDA

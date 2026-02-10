@@ -1,56 +1,85 @@
 package org.stella;
 
-import org.junit.jupiter.api.*;
-import org.junit.jupiter.params.*;
-import org.junit.jupiter.params.provider.*;
-
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.MethodSource;
+import org.junit.jupiter.params.provider.Arguments;
 import static org.junit.jupiter.api.Assertions.*;
+
 import java.io.*;
+import java.nio.file.*;
+import java.util.List;
+import java.util.stream.Stream;
 
 class MainTest {
 
-
-    @ParameterizedTest(name = "{index} Typechecking well-typed program {0}")
-    @ValueSource(strings = {
-            "tests/well-typed/factorial.stella",
-            "tests/well-typed/squares.stella",
-            "tests/well-typed/higher-order-1.stella",
-            "tests/well-typed/increment_twice.stella",
-            "tests/well-typed/logical-operators.stella"})
+    // Тест для хороших программ (ожидаем код возврата 0)
+    @ParameterizedTest(name = "{index} Well-typed: {0}")
+    @MethodSource("wellTypedFiles")
     void testWellTyped(String filepath) throws Exception {
-        String[] args = new String[0];
-        final InputStream original = System.in;
-        final FileInputStream fips = new FileInputStream(filepath);
-        System.setIn(fips);
-        Assertions.assertDoesNotThrow(() -> Main.main(args));
-        System.setIn(original);
+        runTest(filepath, 0, null);
     }
 
-    @ParameterizedTest(name = "{index} Typechecking ill-typed program {0}")
-    @ValueSource(strings = {
-            "tests/ill-typed/applying-non-function-1.stella",
-            "tests/ill-typed/applying-non-function-2.stella",
-            "tests/ill-typed/applying-non-function-3.stella",
-            "tests/ill-typed/argument-type-mismatch-1.stella",
-            "tests/ill-typed/argument-type-mismatch-2.stella",
-            "tests/ill-typed/argument-type-mismatch-3.stella",
-            "tests/ill-typed/bad-if-1.stella",
-            "tests/ill-typed/bad-if-2.stella",
-            "tests/ill-typed/bad-succ-1.stella",
-            "tests/ill-typed/bad-succ-2.stella",
-            "tests/ill-typed/bad-succ-3.stella",
-            "tests/ill-typed/shadowed-variable-1.stella",
-            "tests/ill-typed/undefined-variable-1.stella",
-            "tests/ill-typed/undefined-variable-2.stella",
-            "tests/ill-typed/bad-squares-1.stella",
-            "tests/ill-typed/bad-squares-2.stella"})
+    // Тест для плохих программ (ожидаем код возврата 1 и текст ошибки)
+    @ParameterizedTest(name = "{index} Ill-typed: {0}")
+    @MethodSource("illTypedFiles")
     void testIllTyped(String filepath) throws Exception {
-        String[] args = new String[0];
-        final FileInputStream fips = new FileInputStream(filepath);
-        System.setIn(fips);
+        String expectedError = readExpectedErrorFromFile(filepath);
+        runTest(filepath, 1, expectedError);
+    }
 
-        // Change Exception class to your specific
-        Exception exception = assertThrows(Exception.class, () -> Main.main(args), "Expected the type checker to fail!");
-        System.out.println("Type Error: " + exception.getMessage());
+    // Общий метод запуска
+    private void runTest(String filepath, int expectedExitCode, String expectedErrorMessage) throws Exception {
+        // Создаем "ловушку" для ошибок, чтобы прочитать вывод программы
+        ByteArrayOutputStream errBuffer = new ByteArrayOutputStream();
+        PrintStream errStream = new PrintStream(errBuffer);
+
+        // Открываем файл теста
+        try (FileInputStream fileIn = new FileInputStream(filepath)) {
+
+            // ВАЖНО: Вызываем Main.run, а не main!
+            int actualExitCode = Main.compile(fileIn, System.out, errStream);
+
+            // Проверяем код возврата
+            assertEquals(expectedExitCode, actualExitCode,
+                    "Exit code mismatch for " + filepath + ".\nOutput:\n" + errBuffer.toString());
+
+            // Если ожидаем ошибку, проверяем текст
+            if (expectedErrorMessage != null) {
+                String actualOutput = errBuffer.toString();
+                assertTrue(actualOutput.contains(expectedErrorMessage),
+                        "File: " + filepath + "\n" +
+                                "Expected error to contain: " + expectedErrorMessage + "\n" +
+                                "Actual output:\n" + actualOutput);
+            }
+        }
+    }
+
+    // --- Вспомогательные методы (поиск файлов) ---
+
+    static Stream<Arguments> wellTypedFiles() throws IOException {
+        return Files.list(Paths.get("tests/well-typed")) // Проверьте путь!
+                .filter(p -> p.toString().endsWith(".stella"))
+                .map(p -> Arguments.of(p.toString()));
+    }
+
+    static Stream<Arguments> illTypedFiles() throws IOException {
+        return Files.list(Paths.get("tests/ill-typed")) // Проверьте путь!
+                .filter(p -> p.toString().endsWith(".stella"))
+                .map(p -> Arguments.of(p.toString()));
+    }
+
+    private String readExpectedErrorFromFile(String filepath) throws IOException {
+        List<String> lines = Files.readAllLines(Paths.get(filepath));
+        if (lines.isEmpty()) fail("File empty: " + filepath);
+
+        String lastLine = lines.get(lines.size() - 1);
+        int idx = lastLine.lastIndexOf("///");
+
+        if (idx == -1) {
+            // Если комментария нет, тест не может проверить ошибку
+            fail("No expected error comment (//ERROR...) found in last line of " + filepath);
+        }
+
+        return lastLine.substring(idx + 3).trim();
     }
 }

@@ -16,4 +16,5 @@ fn f(g : fn(Bool) -> Nat) -> fn(Nat) -> Nat {
 
 fn main(n : Nat) -> Nat {
   return f(fn (x : Nat) { return n; })(0);
-}
+}//Unable
+///ERROR_UNEXPECTED_TYPE_FOR_PARAMETER

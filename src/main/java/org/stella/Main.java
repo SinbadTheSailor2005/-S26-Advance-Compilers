@@ -7,6 +7,7 @@ import org.antlr.v4.runtime.dfa.*;
 import java.util.*;
 
 import org.stella.typecheck.TypeCheck;
+import org.stella.typecheck.exceptions.TypeCheckException;
 import org.syntax.stella.*;
 import org.syntax.stella.Absyn.*;
 import org.stella.eval.*;
@@ -16,51 +17,44 @@ public class Main
     stellaLexer l;
     stellaParser p;
 
-    public Main(String[] args)
-    {
-        try
-        {
-            // ИЗМЕНЕНИЕ: Всегда читаем из System.in (stdin)
-            Reader input = new InputStreamReader(System.in);
-
-            l = new stellaLexer(new ANTLRInputStream(input));
-            l.addErrorListener(new BNFCErrorListener());
-        }
-        catch(IOException e)
-        {
-            System.err.println("Error reading from stdin");
-            System.exit(1);
-        }
-
+    // Конструктор принимает InputStream, чтобы можно было подсунуть файл в тестах
+    public Main(InputStream input) throws IOException {
+        Reader reader = new InputStreamReader(input);
+        l = new stellaLexer(new ANTLRInputStream(reader));
+        l.addErrorListener(new BNFCErrorListener());
         p = new stellaParser(new CommonTokenStream(l));
         p.addErrorListener(new BNFCErrorListener());
     }
 
-    public Program parse() throws Exception
-    {
-        /* The default parser is the first-defined entry point. */
+    public Program parse() throws Exception {
         stellaParser.Start_ProgramContext pc = p.start_Program();
-        Program ast = pc.result;
-        return ast;
+        return pc.result;
     }
 
-    public static void main(String args[]) throws Exception
-    {
-        Main t = new Main(args);
-        try
-        {
+    // Точка входа для реального запуска
+    public static void main(String args[]) throws Exception {
+        // Вызываем compile c реальным System.in
+        int exitCode = compile(System.in, System.out, System.err);
+        System.exit(exitCode);
+    }
+
+    // Метод для тестов: возвращает int вместо System.exit
+    public static int compile(InputStream in, PrintStream out, PrintStream err) throws Exception {
+        try {
+            Main t = new Main(in);
             Program ast = t.parse();
-
-            // Запуск проверки типов
             TypeCheck.typecheckProgram(ast);
-
-            System.out.println("OK");
-        }
-        catch(TestError e)
-        {
-            System.err.println("At line " + e.line + ", column " + e.column + " :");
-            System.err.println("     " + e.getMessage());
-            System.exit(1);
+            return 0; // Успех
+        } catch (TypeCheckException e) {
+            err.println(e.getMessage());
+            return 1; // Ошибка типов
+        } catch (TestError e) {
+            err.println("Syntax Error: " + e.getMessage());
+            return 1; // Ошибка синтаксиса
+        } catch (Exception e) {
+            err.println("Internal Error: " + e.getMessage());
+            e.printStackTrace(err);
+            return 1; // Другая ошибка
         }
     }
 }

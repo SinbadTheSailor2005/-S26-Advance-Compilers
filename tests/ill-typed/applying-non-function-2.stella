@@ -2,4 +2,5 @@ language core;
 
 fn main(n : Nat) -> Nat {
   return succ(n)(n);
-}
+}//Unable
+///ERROR_NOT_A_FUNCTION

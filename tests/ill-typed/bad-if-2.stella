@@ -2,4 +2,5 @@ language core;
 
 fn main(x : Nat) -> Nat {
     return if false then true else 0;
-}
+}//Unable
+///ERROR_UNEXPECTED_TYPE_FOR_EXPRESSION

@@ -1,5 +1,6 @@
 package org.stella.typecheck.exceptions;
 
+import org.stella.typecheck.TypePretty;
 import org.syntax.stella.Absyn.Type;
 
 public class TypeCheckException extends RuntimeException {
@@ -10,6 +11,7 @@ public class TypeCheckException extends RuntimeException {
     this.expectedType = expectedType;
     this.actualType = actualType;
     this.errorType = errorType;
+    this.contextMessage = message == null ? "" : message;
   }
   String contextMessage = "";
   private Type expectedType;
@@ -37,10 +39,21 @@ public class TypeCheckException extends RuntimeException {
 
 
   private String getErrorContext() {
-    if (expectedType == null || actualType == null) {
-      return contextMessage;
+    StringBuilder sb = new StringBuilder();
+    if (contextMessage != null && !contextMessage.isBlank()) {
+      sb.append(contextMessage.trim()).append("\n");
     }
-    return "Expected type: " + expectedType + ", but got: " + actualType + "\n";
+
+    // Print expected / actual even if one side is missing: many errors have only one.
+    if (expectedType != null) {
+      sb.append("Expected type: ").append(TypePretty.pretty(expectedType)).append("\n");
+    }
+    if (actualType != null) {
+      sb.append("Actual type:   ").append(TypePretty.pretty(actualType)).append("\n");
+    }
+
+    if (sb.isEmpty()) return "";
+    return sb.toString();
   }
 
   public enum ErrorType {

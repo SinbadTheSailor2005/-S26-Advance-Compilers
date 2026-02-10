@@ -2,4 +2,5 @@ language core;
 
 fn main(f : Nat) -> Nat {
   return f(f);
-}
+}///Unable
+///ERROR_NOT_A_FUNCTION
