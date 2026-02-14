@@ -77,7 +77,6 @@ public final class TypePretty {
       return "forall " + String.join(" ", ta.liststellaident_) + ". " + pretty(ta.type_);
     }
 
-    // Fallback: last resort, but still avoid full package path when possible.
     return t.getClass().getSimpleName();
   }
 

@@ -154,9 +154,6 @@ public class TypeCheckException extends RuntimeException {
     ERROR_DUPLICATE_VARIANT_TYPE_FIELDS;
 
 
-    /* * OPTIONAL EXTENSIONS (Дополнительные коды для бонусных заданий):
-     * Если будешь делать бонусы (Nullary functions, Multi-param), раскомментируй это:
-     */
 
 
   }

@@ -29,7 +29,7 @@ You can use **Maven** to build the project in a single **fat JAR** file and run 
 
 Build a single fat JAR file using maven:
   ```
-  mvn clean package
+   mvn clean install -U -DskipTests
   ```
 
   This will create a file named `stella-implementation-in-java-1.0-SNAPSHOT.jar` under the `target` directory.
@@ -41,6 +41,7 @@ Run command
 ```
 java -jar target/stella-implementation-in-java-1.0-SNAPSHOT.jar
 ```
+Then paste code. Lastly enter EOF symbol (Ctrl+D in Linux/Mac, Ctrl+Z in Windows) to finish input and see the result.
 
 
 ## Updating grammar
