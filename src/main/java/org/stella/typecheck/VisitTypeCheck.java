@@ -338,7 +338,6 @@ public class VisitTypeCheck {
           x.accept(new AnnotationVisitor(), ctx);
         }
 
-        // Generic type variables are tracked implicitly by the parser/AST; no action here.
         for (org.syntax.stella.Absyn.ParamDecl x : p.listparamdecl_) {
           x.accept(new ParamDeclVisitor(), ctx);
         }
@@ -462,7 +461,6 @@ public class VisitTypeCheck {
         }
         return p;
       }
-      // Метод для детального сравнения записей и выброса специфичных ошибок
 
       @Override
       public Type visit(org.syntax.stella.Absyn.TypeVariant p, Context ctx) {
@@ -826,7 +824,6 @@ public class VisitTypeCheck {
       public Type visit(
               org.syntax.stella.Absyn.TypeAbstraction p,
               Context ctx) { /* Code for TypeAbstraction goes here */
-        // Type abstraction (forall-intro) is not handled here.
         p.expr_.accept(new ExprVisitor(), ctx);
         return null;
       }
@@ -1445,7 +1442,6 @@ public class VisitTypeCheck {
 
       /**
        * если нам прокинули сверху TypeRecord, то для каждого поля мы прокидываем ожидаемый тип
-       * то для каждого
        *
        * @param p
        * @param ctx
