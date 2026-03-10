@@ -5,7 +5,9 @@ package org.stella.typecheck;
 import org.stella.typecheck.exceptions.TypeCheckException;
 import org.syntax.stella.Absyn.*;
 
+import java.util.HashSet;
 import java.util.Optional;
+import java.util.Set;
 
 /*** Visitor Design Pattern Skeleton. ***/
 
@@ -182,13 +184,11 @@ public class VisitTypeCheck {
       if (expected instanceof org.syntax.stella.Absyn.TypeRecord expectedRecord &&
               actual instanceof org.syntax.stella.Absyn.TypeRecord actualRecord) {
         checkRecordMismatch(expectedRecord, actualRecord);
-        return;
       }
 
       if (expected instanceof org.syntax.stella.Absyn.TypeVariant expectedVariant &&
               actual instanceof org.syntax.stella.Absyn.TypeVariant actualVariant) {
         checkVariantMismatch(expectedVariant, actualVariant);
-        return;
       }
 
       throw new TypeCheckException(
@@ -1064,7 +1064,7 @@ public class VisitTypeCheck {
         boolean checkedInl = false;
         boolean checkedInr = false;
         boolean checkedVar = false;
-
+        Set<String> matchedVariantLabels = new HashSet<>();
         Type outerExpected = ctx.getCurrentExpectedType();
         Type inferredReturnType = null;
 
@@ -1078,6 +1078,8 @@ public class VisitTypeCheck {
             checkedInr = true;
           } else if (c.pattern_ instanceof org.syntax.stella.Absyn.PatternVar) {
             checkedVar = true;
+          } else if (c.pattern_ instanceof PatternVariant variantPattern) {
+            matchedVariantLabels.add(variantPattern.stellaident_);
           }
 
           ctx.enterScope();
@@ -1108,20 +1110,43 @@ public class VisitTypeCheck {
           ctx.exitScope();
         }
 
-        checkForExhaustiveMatch(inputType, checkedVar, checkedInl, checkedInr);
+        checkForExhaustiveMatch(inputType, checkedVar, checkedInl, checkedInr
+                , matchedVariantLabels);
 
         return outerExpected != null ? outerExpected : inferredReturnType;
       }
 
       private void checkForExhaustiveMatch(
               Type inputType, boolean checkedVar, boolean checkedInl,
-              boolean checkedInr) {
+              boolean checkedInr, Set<String> matchedVariantLabels) {
         if (inputType instanceof TypeSum) {
           if (!checkedVar && (!checkedInl || !checkedInr)) {
             throw new TypeCheckException(
                     TypeCheckException.ErrorType.ERROR_NONEXHAUSTIVE_MATCH_PATTERNS,
                     "Non-exhaustive patterns in match expression. " +
                             "Missing: " + (!checkedInl ? "inl " : "") + (!checkedInr ? "inr" : "")
+            );
+          }
+        }
+        else if (inputType instanceof TypeVariant variant) {
+          var missingLabels = variant.listvariantfieldtype_.stream()
+                  .filter(t -> t instanceof AVariantFieldType)
+                  .map(t -> ((AVariantFieldType) t).stellaident_)
+                  .filter(label -> !matchedVariantLabels.contains(label))
+                  .toList();
+
+          if (!missingLabels.isEmpty()) {
+            String missingCases = String.join(", ", missingLabels);
+
+            String errorMessage = """
+            Non-exhaustive patterns in match expression.
+            Missing variants: [%s]
+            Found in type: %s\
+            """.formatted(missingCases, TypePretty.pretty(inputType));
+
+            throw new TypeCheckException(
+                    TypeCheckException.ErrorType.ERROR_NONEXHAUSTIVE_MATCH_PATTERNS,
+                    errorMessage
             );
           }
         }
@@ -1172,7 +1197,7 @@ public class VisitTypeCheck {
 
       private Type tryToInferListTypeFromAbove(Context ctx) {
         if (ctx.getCurrentExpectedType() instanceof TypeList tl) {
-          return tl;
+          return tl.type_;
         } else if (ctx.getCurrentExpectedType() != null) {
           throw new TypeCheckException(
                   TypeCheckException.ErrorType.ERROR_UNEXPECTED_LIST,
@@ -1309,8 +1334,9 @@ public class VisitTypeCheck {
        * @return
        */
       public Type visit(org.syntax.stella.Absyn.DotRecord p, Context ctx) {
+        ctx.pushExpectedType(null);
         Type leftType = p.expr_.accept(new ExprVisitor(), ctx);
-
+      ctx.popExpectedType();
         TypeRecord recordType = checkThatTypeIsTypeRecord(leftType);
 
         String fieldName = p.stellaident_;
@@ -1686,7 +1712,7 @@ public class VisitTypeCheck {
         ctx.pushExpectedType(ts.type_1);
         var t1 = p.expr_.accept(new ExprVisitor(), ctx);
         ctx.popExpectedType();
-        checkForMismatch(t1, ts.type_1);
+        checkForMismatch(ts.type_1, t1);
         return currentExpected;
       }
 
