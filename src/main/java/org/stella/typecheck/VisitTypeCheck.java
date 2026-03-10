@@ -184,11 +184,13 @@ public class VisitTypeCheck {
       if (expected instanceof org.syntax.stella.Absyn.TypeRecord expectedRecord &&
               actual instanceof org.syntax.stella.Absyn.TypeRecord actualRecord) {
         checkRecordMismatch(expectedRecord, actualRecord);
+        return;
       }
 
       if (expected instanceof org.syntax.stella.Absyn.TypeVariant expectedVariant &&
               actual instanceof org.syntax.stella.Absyn.TypeVariant actualVariant) {
         checkVariantMismatch(expectedVariant, actualVariant);
+        return;
       }
 
       throw new TypeCheckException(
@@ -634,7 +636,7 @@ public class VisitTypeCheck {
 
         org.syntax.stella.Absyn.AVariantFieldType field =
                 getAVariantFieldType(p.stellaident_, typeVariant).orElseThrow(() ->  new TypeCheckException(
-                        TypeCheckException.ErrorType.ERROR_UNEXPECTED_VARIANT_LABEL,
+                        TypeCheckException.ErrorType.ERROR_UNEXPECTED_PATTERN_FOR_TYPE,
                         "Label '" + p.stellaident_ + "' is not defined in expected type "
                                 + TypePretty.pretty(typeVariant)
                 ));
