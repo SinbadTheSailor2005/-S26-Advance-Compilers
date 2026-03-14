@@ -6,11 +6,11 @@ public class TypeBottom  extends Type {
   public int line_num, col_num, offset;
   public TypeBottom() { }
 
-  public <R,A> R accept(org.syntax.stella.Absyn.Type.Visitor<R,A> v, A arg) { return v.visit(this, arg); }
+  public <R,A> R accept(Type.Visitor<R,A> v, A arg) { return v.visit(this, arg); }
 
-  public boolean equals(java.lang.Object o) {
+  public boolean equals(Object o) {
     if (this == o) return true;
-    if (o instanceof org.syntax.stella.Absyn.TypeBottom) {
+    if (o instanceof TypeBottom) {
       return true;
     }
     return false;

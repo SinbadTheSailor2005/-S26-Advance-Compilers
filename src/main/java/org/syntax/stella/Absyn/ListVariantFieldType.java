@@ -2,5 +2,7 @@
 
 package org.syntax.stella.Absyn;
 
-public class ListVariantFieldType extends java.util.LinkedList<VariantFieldType> {
+import java.util.LinkedList;
+
+public class ListVariantFieldType extends LinkedList<VariantFieldType> {
 }

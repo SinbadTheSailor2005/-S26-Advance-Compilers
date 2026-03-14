@@ -2,5 +2,7 @@
 
 package org.syntax.stella.Absyn;
 
-public class ListParamDecl extends java.util.LinkedList<ParamDecl> {
+import java.util.LinkedList;
+
+public class ListParamDecl extends LinkedList<ParamDecl> {
 }

@@ -7,12 +7,12 @@ public class TypeTuple  extends Type {
   public int line_num, col_num, offset;
   public TypeTuple(ListType p1) { listtype_ = p1; }
 
-  public <R,A> R accept(org.syntax.stella.Absyn.Type.Visitor<R,A> v, A arg) { return v.visit(this, arg); }
+  public <R,A> R accept(Type.Visitor<R,A> v, A arg) { return v.visit(this, arg); }
 
-  public boolean equals(java.lang.Object o) {
+  public boolean equals(Object o) {
     if (this == o) return true;
-    if (o instanceof org.syntax.stella.Absyn.TypeTuple) {
-      org.syntax.stella.Absyn.TypeTuple x = (org.syntax.stella.Absyn.TypeTuple)o;
+    if (o instanceof TypeTuple) {
+      TypeTuple x = (TypeTuple)o;
       return this.listtype_.equals(x.listtype_);
     }
     return false;

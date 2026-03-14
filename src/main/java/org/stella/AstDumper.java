@@ -1,6 +1,7 @@
 package org.stella;
 
 import java.lang.reflect.Field;
+import java.lang.reflect.Modifier;
 import java.util.List;
 
 public class AstDumper {
@@ -47,7 +48,7 @@ public class AstDumper {
     // Бежим по всем полям класса
     for (Field field : clazz.getFields()) {
       // Пропускаем статические поля
-      if (java.lang.reflect.Modifier.isStatic(field.getModifiers())) continue;
+      if (Modifier.isStatic(field.getModifiers())) continue;
 
       try {
         Object value = field.get(o);

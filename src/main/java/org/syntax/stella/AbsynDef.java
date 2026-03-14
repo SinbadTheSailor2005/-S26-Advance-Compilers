@@ -2,15 +2,20 @@
 
 package org.syntax.stella;
 
+import org.syntax.stella.Absyn.Pattern;
+import org.syntax.stella.Absyn.PatternCons;
+
+import java.util.LinkedList;
+
 public class AbsynDef {
 
-  public static <B,A extends java.util.LinkedList<? super B>> A cons(B x, A xs) {
+  public static <B,A extends LinkedList<? super B>> A cons(B x, A xs) {
     xs.addFirst(x);
     return xs;
   }
 
-  public static org.syntax.stella.Absyn.Pattern patternCons(org.syntax.stella.Absyn.Pattern h, org.syntax.stella.Absyn.Pattern t) {
-    return new org.syntax.stella.Absyn.PatternCons(h, t);
+  public static Pattern patternCons(Pattern h, Pattern t) {
+    return new PatternCons(h, t);
   }
 
 }

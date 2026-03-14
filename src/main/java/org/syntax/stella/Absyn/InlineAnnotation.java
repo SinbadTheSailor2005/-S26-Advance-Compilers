@@ -6,11 +6,11 @@ public class InlineAnnotation  extends Annotation {
   public int line_num, col_num, offset;
   public InlineAnnotation() { }
 
-  public <R,A> R accept(org.syntax.stella.Absyn.Annotation.Visitor<R,A> v, A arg) { return v.visit(this, arg); }
+  public <R,A> R accept(Annotation.Visitor<R,A> v, A arg) { return v.visit(this, arg); }
 
-  public boolean equals(java.lang.Object o) {
+  public boolean equals(Object o) {
     if (this == o) return true;
-    if (o instanceof org.syntax.stella.Absyn.InlineAnnotation) {
+    if (o instanceof InlineAnnotation) {
       return true;
     }
     return false;

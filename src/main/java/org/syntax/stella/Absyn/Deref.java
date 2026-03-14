@@ -7,12 +7,12 @@ public class Deref  extends Expr {
   public int line_num, col_num, offset;
   public Deref(Expr p1) { expr_ = p1; }
 
-  public <R,A> R accept(org.syntax.stella.Absyn.Expr.Visitor<R,A> v, A arg) { return v.visit(this, arg); }
+  public <R,A> R accept(Expr.Visitor<R,A> v, A arg) { return v.visit(this, arg); }
 
-  public boolean equals(java.lang.Object o) {
+  public boolean equals(Object o) {
     if (this == o) return true;
-    if (o instanceof org.syntax.stella.Absyn.Deref) {
-      org.syntax.stella.Absyn.Deref x = (org.syntax.stella.Absyn.Deref)o;
+    if (o instanceof Deref) {
+      Deref x = (Deref)o;
       return this.expr_.equals(x.expr_);
     }
     return false;

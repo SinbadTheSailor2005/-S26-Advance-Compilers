@@ -6,11 +6,11 @@ public class NoThrowType  extends ThrowType {
   public int line_num, col_num, offset;
   public NoThrowType() { }
 
-  public <R,A> R accept(org.syntax.stella.Absyn.ThrowType.Visitor<R,A> v, A arg) { return v.visit(this, arg); }
+  public <R,A> R accept(ThrowType.Visitor<R,A> v, A arg) { return v.visit(this, arg); }
 
-  public boolean equals(java.lang.Object o) {
+  public boolean equals(Object o) {
     if (this == o) return true;
-    if (o instanceof org.syntax.stella.Absyn.NoThrowType) {
+    if (o instanceof NoThrowType) {
       return true;
     }
     return false;

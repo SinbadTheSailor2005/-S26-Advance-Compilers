@@ -8,12 +8,12 @@ public class TryCatch  extends Expr {
   public int line_num, col_num, offset;
   public TryCatch(Expr p1, Pattern p2, Expr p3) { expr_1 = p1; pattern_ = p2; expr_2 = p3; }
 
-  public <R,A> R accept(org.syntax.stella.Absyn.Expr.Visitor<R,A> v, A arg) { return v.visit(this, arg); }
+  public <R,A> R accept(Expr.Visitor<R,A> v, A arg) { return v.visit(this, arg); }
 
-  public boolean equals(java.lang.Object o) {
+  public boolean equals(Object o) {
     if (this == o) return true;
-    if (o instanceof org.syntax.stella.Absyn.TryCatch) {
-      org.syntax.stella.Absyn.TryCatch x = (org.syntax.stella.Absyn.TryCatch)o;
+    if (o instanceof TryCatch) {
+      TryCatch x = (TryCatch)o;
       return this.expr_1.equals(x.expr_1) && this.pattern_.equals(x.pattern_) && this.expr_2.equals(x.expr_2);
     }
     return false;

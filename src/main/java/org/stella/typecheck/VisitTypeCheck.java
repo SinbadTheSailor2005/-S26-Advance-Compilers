@@ -4,10 +4,14 @@ package org.stella.typecheck;
 
 import org.stella.typecheck.exceptions.TypeCheckException;
 import org.syntax.stella.Absyn.*;
+import org.syntax.stella.Absyn.Record;
 
+import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.Optional;
 import java.util.Set;
+
+import static org.stella.typecheck.VisitTypeCheck.ProgramVisitor.getOptionalTypingType;
 
 /*** Visitor Design Pattern Skeleton. ***/
 
@@ -74,15 +78,15 @@ public class VisitTypeCheck {
       if (tr1.listrecordfieldtype_.size() != tr2.listrecordfieldtype_.size())
         return false;
 
-      for (org.syntax.stella.Absyn.RecordFieldType f1_abstract : tr1.listrecordfieldtype_) {
-        org.syntax.stella.Absyn.ARecordFieldType f1 =
-                (org.syntax.stella.Absyn.ARecordFieldType) f1_abstract;
+      for (RecordFieldType f1_abstract : tr1.listrecordfieldtype_) {
+        ARecordFieldType f1 =
+                (ARecordFieldType) f1_abstract;
 
         boolean found = false;
 
-        for (org.syntax.stella.Absyn.RecordFieldType f2_abstract : tr2.listrecordfieldtype_) {
-          org.syntax.stella.Absyn.ARecordFieldType f2 =
-                  (org.syntax.stella.Absyn.ARecordFieldType) f2_abstract;
+        for (RecordFieldType f2_abstract : tr2.listrecordfieldtype_) {
+          ARecordFieldType f2 =
+                  (ARecordFieldType) f2_abstract;
 
           if (f1.stellaident_.equals(f2.stellaident_)) {
             if (!isSameType(f1.type_, f2.type_)) {
@@ -98,13 +102,48 @@ public class VisitTypeCheck {
 
       return true;
     }
+    if (t1 instanceof TypeVariant tv1 && t2 instanceof TypeVariant tv2) {
+      if (tv1.listvariantfieldtype_.size() != tv2.listvariantfieldtype_.size())
+        return false;
 
+      for (VariantFieldType f1_abstract : tv1.listvariantfieldtype_) {
+        AVariantFieldType f1 =
+                (AVariantFieldType) f1_abstract;
+
+        boolean found = false;
+
+        for (VariantFieldType f2_abstract : tv2.listvariantfieldtype_) {
+          AVariantFieldType f2 =
+                  (AVariantFieldType) f2_abstract;
+
+          if (f1.stellaident_.equals(f2.stellaident_)) {
+            Type inner1 = getOptionalTypingType(f1.optionaltyping_);
+            Type inner2 = getOptionalTypingType(f2.optionaltyping_);
+
+            if (inner1 != null && inner2 != null) {
+              if (!isSameType(inner1, inner2)) {
+                return false;
+              }
+            } else if (inner1 != null || inner2 != null) {
+              return false;
+            }
+
+            found = true;
+            break;
+          }
+        }
+
+        if (!found) return false;
+      }
+
+      return true;
+    }
     return false;
   }
 
-  public class ProgramVisitor implements org.syntax.stella.Absyn.Program.Visitor<Type, Context> {
+  public class ProgramVisitor implements Program.Visitor<Type, Context> {
     public Type visit(
-            org.syntax.stella.Absyn.AProgram p,
+            AProgram p,
             Context ctx) { /* Code for AProgram goes here */
       p.languagedecl_.accept(new LanguageDeclVisitor(), ctx);
 //      for (org.syntax.stella.Absyn.Extension x : p.listextension_) {
@@ -173,17 +212,17 @@ public class VisitTypeCheck {
       );
     }
 
-    public static class LanguageDeclVisitor implements org.syntax.stella.Absyn.LanguageDecl.Visitor<Type, Context> {
+    public static class LanguageDeclVisitor implements LanguageDecl.Visitor<Type, Context> {
       public Type visit(
-              org.syntax.stella.Absyn.LanguageCore p,
+              LanguageCore p,
               Context ctx) { /* Code for LanguageCore goes here */
         return null;
       }
     }
 
-    public static class ExtensionVisitor implements org.syntax.stella.Absyn.Extension.Visitor<Type, Context> {
+    public static class ExtensionVisitor implements Extension.Visitor<Type, Context> {
       public Type visit(
-              org.syntax.stella.Absyn.AnExtension p,
+              AnExtension p,
               Context ctx) { /* Code for AnExtension goes here */
         // Extensions are ignored in this typechecker implementation.
         return null;
@@ -191,20 +230,16 @@ public class VisitTypeCheck {
     }
 
     public static boolean isSubtype(Type S, Type T, Context ctx) {
-      // 1. Если расширение выключено, работает только строгое равенство
       if (!ctx.isSubtypingEnabled()) {
         return isSameType(S, T);
       }
 
-      // 2. Рефлексивность (S <: S)
       if (isSameType(S, T)) return true;
 
-      // 3. Top и Bottom типы
-      if (S instanceof org.syntax.stella.Absyn.TypeBottom) return true;
-      if (T instanceof org.syntax.stella.Absyn.TypeTop) return true;
+      if (S instanceof TypeBottom) return true;
+      if (T instanceof TypeTop) return true;
 
-      // 4. Функции: Аргументы - контрвариантны, Возврат - ковариантен
-      if (S instanceof org.syntax.stella.Absyn.TypeFun funS && T instanceof org.syntax.stella.Absyn.TypeFun funT) {
+      if (S instanceof TypeFun funS && T instanceof TypeFun funT) {
         if (funS.listtype_.size() != funT.listtype_.size()) return false;
         // T_arg <: S_arg
         for (int i = 0; i < funS.listtype_.size(); i++) {
@@ -214,25 +249,25 @@ public class VisitTypeCheck {
         return isSubtype(funS.type_, funT.type_, ctx);
       }
 
-      // 5. Записи (Records): Width subtyping + Depth subtyping
-      if (S instanceof org.syntax.stella.Absyn.TypeRecord recS && T instanceof org.syntax.stella.Absyn.TypeRecord recT) {
-        for (org.syntax.stella.Absyn.RecordFieldType fT : recT.listrecordfieldtype_) {
-          org.syntax.stella.Absyn.ARecordFieldType afT = (org.syntax.stella.Absyn.ARecordFieldType) fT;
-          org.syntax.stella.Absyn.ARecordFieldType afS = findRecordField(recS, afT.stellaident_);
+      if (S instanceof TypeRecord recS && T instanceof TypeRecord recT) {
+        // У подтипа обязаны быть все поля супертипа
+        for (RecordFieldType fT : recT.listrecordfieldtype_) {
+          ARecordFieldType afT = (ARecordFieldType) fT;
+          ARecordFieldType afS = findRecordField(recS, afT.stellaident_);
 
-          if (afS == null) return false; // У подтипа обязаны быть все поля супертипа
+          if (afS == null) return false;
           if (!isSubtype(afS.type_, afT.type_, ctx)) return false; // Типы полей ковариантны
         }
         return true;
       }
 
-      // 6. Варианты (Variants): Width subtyping + Depth subtyping
-      if (S instanceof org.syntax.stella.Absyn.TypeVariant varS && T instanceof org.syntax.stella.Absyn.TypeVariant varT) {
-        for (org.syntax.stella.Absyn.VariantFieldType fS : varS.listvariantfieldtype_) {
-          org.syntax.stella.Absyn.AVariantFieldType afS = (org.syntax.stella.Absyn.AVariantFieldType) fS;
-          org.syntax.stella.Absyn.AVariantFieldType afT = findVariantField(varT, afS.stellaident_);
+      if (S instanceof TypeVariant varS && T instanceof TypeVariant varT) {
+        // тут наоборот у супертипа обязаны быть все варианты подтипа
+        for (VariantFieldType fS : varS.listvariantfieldtype_) {
+          AVariantFieldType afS = (AVariantFieldType) fS;
+          AVariantFieldType afT = findVariantField(varT, afS.stellaident_);
 
-          if (afT == null) return false; // У супертипа обязаны быть все варианты подтипа
+          if (afT == null) return false;
 
           Type innerS = getOptionalTypingType(afS.optionaltyping_);
           Type innerT = getOptionalTypingType(afT.optionaltyping_);
@@ -245,28 +280,23 @@ public class VisitTypeCheck {
         }
         return true;
       }
-
-      // 7. Кортежи (Tuples)
-      if (S instanceof org.syntax.stella.Absyn.TypeTuple tupS && T instanceof org.syntax.stella.Absyn.TypeTuple tupT) {
+      if (S instanceof TypeTuple tupS && T instanceof TypeTuple tupT) {
         if (tupS.listtype_.size() != tupT.listtype_.size()) return false;
         for (int i = 0; i < tupS.listtype_.size(); i++) {
           if (!isSubtype(tupS.listtype_.get(i), tupT.listtype_.get(i), ctx)) return false;
         }
         return true;
       }
-
-      // 8. Списки (Lists)
-      if (S instanceof org.syntax.stella.Absyn.TypeList listS && T instanceof org.syntax.stella.Absyn.TypeList listT) {
+      if (S instanceof TypeList listS && T instanceof TypeList listT) {
         return isSubtype(listS.type_, listT.type_, ctx);
       }
 
-      // 9. Суммы (Sum Types)
-      if (S instanceof org.syntax.stella.Absyn.TypeSum sumS && T instanceof org.syntax.stella.Absyn.TypeSum sumT) {
+      if (S instanceof TypeSum sumS && T instanceof TypeSum sumT) {
         return isSubtype(sumS.type_1, sumT.type_1, ctx) && isSubtype(sumS.type_2, sumT.type_2, ctx);
       }
 
-      // 10. Ссылки (References): Инвариантны
-      if (S instanceof org.syntax.stella.Absyn.TypeRef refS && T instanceof org.syntax.stella.Absyn.TypeRef refT) {
+      // Инвариантны
+      if (S instanceof TypeRef refS && T instanceof TypeRef refT) {
         return isSubtype(refS.type_, refT.type_, ctx) && isSubtype(refT.type_, refS.type_, ctx);
       }
 
@@ -274,18 +304,18 @@ public class VisitTypeCheck {
     }
 
     public static void checkForMismatch(
-            org.syntax.stella.Absyn.Type expected,
-            org.syntax.stella.Absyn.Type actual,
+            Type expected,
+            Type actual,
             Context ctx) {
       if (isSubtype(actual, expected, ctx)) return;
 
-      if (expected instanceof org.syntax.stella.Absyn.TypeRecord expectedRecord &&
-              actual instanceof org.syntax.stella.Absyn.TypeRecord actualRecord) {
+      if (expected instanceof TypeRecord expectedRecord &&
+              actual instanceof TypeRecord actualRecord) {
         checkRecordMismatch(expectedRecord, actualRecord, ctx);
       }
 
-      if (expected instanceof org.syntax.stella.Absyn.TypeVariant expectedVariant &&
-              actual instanceof org.syntax.stella.Absyn.TypeVariant actualVariant) {
+      if (expected instanceof TypeVariant expectedVariant &&
+              actual instanceof TypeVariant actualVariant) {
         checkVariantMismatch(expectedVariant, actualVariant, ctx);
       }
 
@@ -304,22 +334,22 @@ public class VisitTypeCheck {
     }
 
     public static void checkVariantMismatch(
-            org.syntax.stella.Absyn.TypeVariant expected,
-            org.syntax.stella.Absyn.TypeVariant actual,
+            TypeVariant expected,
+            TypeVariant actual,
             Context ctx) {
 
-      java.util.Set<String> expectedLabels = new java.util.HashSet<>();
-      for (org.syntax.stella.Absyn.VariantFieldType f : expected.listvariantfieldtype_) {
-        expectedLabels.add(((org.syntax.stella.Absyn.AVariantFieldType) f).stellaident_);
+      Set<String> expectedLabels = new HashSet<>();
+      for (VariantFieldType f : expected.listvariantfieldtype_) {
+        expectedLabels.add(((AVariantFieldType) f).stellaident_);
       }
 
-      java.util.Set<String> actualLabels = new java.util.HashSet<>();
-      for (org.syntax.stella.Absyn.VariantFieldType f : actual.listvariantfieldtype_) {
-        actualLabels.add(((org.syntax.stella.Absyn.AVariantFieldType) f).stellaident_);
+      Set<String> actualLabels = new HashSet<>();
+      for (VariantFieldType f : actual.listvariantfieldtype_) {
+        actualLabels.add(((AVariantFieldType) f).stellaident_);
       }
 
       // В сабтайпинге подтип НЕ может иметь лишних лейблов, которых нет в супертипе.
-      java.util.List<String> unexpected = new java.util.ArrayList<>();
+      java.util.List<String> unexpected = new ArrayList<>();
       for (String label : actualLabels) {
         if (!expectedLabels.contains(label)) unexpected.add(label);
       }
@@ -331,7 +361,7 @@ public class VisitTypeCheck {
       }
 
       // Но подтип МОЖЕТ не иметь некоторых лейблов супертипа (если сабтайпинг включен).
-      java.util.List<String> missing = new java.util.ArrayList<>();
+      java.util.List<String> missing = new ArrayList<>();
       for (String label : expectedLabels) {
         if (!actualLabels.contains(label)) missing.add(label);
       }
@@ -346,22 +376,22 @@ public class VisitTypeCheck {
     }
 
     public static void checkRecordMismatch(
-            org.syntax.stella.Absyn.TypeRecord expected,
-            org.syntax.stella.Absyn.TypeRecord actual,
+            TypeRecord expected,
+            TypeRecord actual,
             Context ctx) {
 
-      java.util.Set<String> expectedFields = new java.util.HashSet<>();
-      for (org.syntax.stella.Absyn.RecordFieldType f : expected.listrecordfieldtype_) {
-        expectedFields.add(((org.syntax.stella.Absyn.ARecordFieldType) f).stellaident_);
+      Set<String> expectedFields = new HashSet<>();
+      for (RecordFieldType f : expected.listrecordfieldtype_) {
+        expectedFields.add(((ARecordFieldType) f).stellaident_);
       }
 
-      java.util.Set<String> actualFields = new java.util.HashSet<>();
-      for (org.syntax.stella.Absyn.RecordFieldType f : actual.listrecordfieldtype_) {
-        actualFields.add(((org.syntax.stella.Absyn.ARecordFieldType) f).stellaident_);
+      Set<String> actualFields = new HashSet<>();
+      for (RecordFieldType f : actual.listrecordfieldtype_) {
+        actualFields.add(((ARecordFieldType) f).stellaident_);
       }
 
       // Подтип ОБЯЗАН иметь все поля супертипа. Отсутствие поля - всегда ошибка.
-      java.util.List<String> missing = new java.util.ArrayList<>();
+      java.util.List<String> missing = new ArrayList<>();
       for (String f : expectedFields) {
         if (!actualFields.contains(f)) missing.add(f);
       }
@@ -373,7 +403,7 @@ public class VisitTypeCheck {
       }
 
       // Подтип МОЖЕТ иметь дополнительные поля, если сабтайпинг включен.
-      java.util.List<String> unexpected = new java.util.ArrayList<>();
+      java.util.List<String> unexpected = new ArrayList<>();
       for (String f : actualFields) {
         if (!expectedFields.contains(f)) unexpected.add(f);
       }
@@ -388,38 +418,39 @@ public class VisitTypeCheck {
     }
 
     // Хелперы для чистоты кода
-    private static org.syntax.stella.Absyn.ARecordFieldType findRecordField(org.syntax.stella.Absyn.TypeRecord rec, String name) {
-      for (org.syntax.stella.Absyn.RecordFieldType f : rec.listrecordfieldtype_) {
-        org.syntax.stella.Absyn.ARecordFieldType af = (org.syntax.stella.Absyn.ARecordFieldType) f;
+    private static ARecordFieldType findRecordField(TypeRecord rec, String name) {
+      for (RecordFieldType f : rec.listrecordfieldtype_) {
+        ARecordFieldType af = (ARecordFieldType) f;
         if (af.stellaident_.equals(name)) return af;
       }
       return null;
     }
 
-    private static org.syntax.stella.Absyn.AVariantFieldType findVariantField(org.syntax.stella.Absyn.TypeVariant var, String name) {
-      for (org.syntax.stella.Absyn.VariantFieldType f : var.listvariantfieldtype_) {
-        org.syntax.stella.Absyn.AVariantFieldType af = (org.syntax.stella.Absyn.AVariantFieldType) f;
+    private static AVariantFieldType findVariantField(TypeVariant var, String name) {
+      for (VariantFieldType f : var.listvariantfieldtype_) {
+        AVariantFieldType af = (AVariantFieldType) f;
         if (af.stellaident_.equals(name)) return af;
       }
       return null;
     }
 
-    private static Type getOptionalTypingType(org.syntax.stella.Absyn.OptionalTyping opt) {
-      if (opt instanceof org.syntax.stella.Absyn.SomeTyping) {
-        return ((org.syntax.stella.Absyn.SomeTyping) opt).type_;
+    public static Type getOptionalTypingType(
+            OptionalTyping opt) {
+      if (opt instanceof SomeTyping) {
+        return ((SomeTyping) opt).type_;
       }
       return null;
     }
 
-    public class DeclVisitor implements org.syntax.stella.Absyn.Decl.Visitor<Type, Context> {
-      public Type visit(org.syntax.stella.Absyn.DeclFun p, Context ctx) {
+    public class DeclVisitor implements Decl.Visitor<Type, Context> {
+      public Type visit(DeclFun p, Context ctx) {
         ctx.enterScope();
 
         addParametersToContext(p, ctx);
 
         addMethodDeclarationsToContext(p, ctx);
 
-        for (org.syntax.stella.Absyn.Decl decl : p.listdecl_) {
+        for (Decl decl : p.listdecl_) {
           decl.accept(this, ctx);
         }
 
@@ -463,18 +494,18 @@ public class VisitTypeCheck {
 
 
       public Type visit(
-              org.syntax.stella.Absyn.DeclFunGeneric p,
+              DeclFunGeneric p,
               Context ctx) { /* Code for DeclFunGeneric goes here */
-        for (org.syntax.stella.Absyn.Annotation x : p.listannotation_) {
+        for (Annotation x : p.listannotation_) {
           x.accept(new AnnotationVisitor(), ctx);
         }
 
-        for (org.syntax.stella.Absyn.ParamDecl x : p.listparamdecl_) {
+        for (ParamDecl x : p.listparamdecl_) {
           x.accept(new ParamDeclVisitor(), ctx);
         }
         p.returntype_.accept(new ReturnTypeVisitor(), ctx);
         p.throwtype_.accept(new ThrowTypeVisitor(), ctx);
-        for (org.syntax.stella.Absyn.Decl x : p.listdecl_) {
+        for (Decl x : p.listdecl_) {
           x.accept(new DeclVisitor(), ctx);
         }
         p.expr_.accept(new ExprVisitor(), ctx);
@@ -482,7 +513,7 @@ public class VisitTypeCheck {
       }
 
       public Type visit(
-              org.syntax.stella.Absyn.DeclTypeAlias p,
+              DeclTypeAlias p,
               Context ctx) { /* Code for DeclTypeAlias goes here */
 
         p.type_.accept(new TypeVisitor(), ctx);
@@ -490,14 +521,14 @@ public class VisitTypeCheck {
       }
 
       public Type visit(
-              org.syntax.stella.Absyn.DeclExceptionType p,
+              DeclExceptionType p,
               Context ctx) { /* Code for DeclExceptionType goes here */
         ctx.setExceptionType(p.type_);
         return p.type_.accept(new TypeVisitor(), ctx);
       }
 
       public Type visit(
-              org.syntax.stella.Absyn.DeclExceptionVariant p,
+              DeclExceptionVariant p,
               Context ctx) { /* Code for DeclExceptionVariant goes here */
 
         p.type_.accept(new TypeVisitor(), ctx);
@@ -506,9 +537,9 @@ public class VisitTypeCheck {
     }
 
     // ------------------
-    public class LocalDeclVisitor implements org.syntax.stella.Absyn.LocalDecl.Visitor<Type, Context> {
+    public class LocalDeclVisitor implements LocalDecl.Visitor<Type, Context> {
       public Type visit(
-              org.syntax.stella.Absyn.ALocalDecl p,
+              ALocalDecl p,
               Context ctx) { /* Code for ALocalDecl goes here */
         p.decl_.accept(new DeclVisitor(), ctx);
         return null;
@@ -516,18 +547,18 @@ public class VisitTypeCheck {
     }
 
     // ------------------
-    public static class AnnotationVisitor implements org.syntax.stella.Absyn.Annotation.Visitor<Type, Context> {
+    public static class AnnotationVisitor implements Annotation.Visitor<Type, Context> {
       public Type visit(
-              org.syntax.stella.Absyn.InlineAnnotation p,
+              InlineAnnotation p,
               Context ctx) { /* Code for InlineAnnotation goes here */
         return null;
       }
     }
 
     // ------------------
-    public class ParamDeclVisitor implements org.syntax.stella.Absyn.ParamDecl.Visitor<Type, Context> {
+    public class ParamDeclVisitor implements ParamDecl.Visitor<Type, Context> {
       public Type visit(
-              org.syntax.stella.Absyn.AParamDecl p,
+              AParamDecl p,
               Context ctx) { /* Code for AParamDecl goes here */
 
         return p.type_.accept(new TypeVisitor(), ctx);
@@ -535,32 +566,32 @@ public class VisitTypeCheck {
     }
 
     // ------------------
-    public class ReturnTypeVisitor implements org.syntax.stella.Absyn.ReturnType.Visitor<Type, Context> {
+    public class ReturnTypeVisitor implements ReturnType.Visitor<Type, Context> {
       public Type visit(
-              org.syntax.stella.Absyn.NoReturnType p,
+              NoReturnType p,
               Context ctx) { /* Code for NoReturnType goes here */
         return new TypeUnit();
       }
 
       public Type visit(
-              org.syntax.stella.Absyn.SomeReturnType p,
+              SomeReturnType p,
               Context ctx) { /* Code for SomeReturnType goes here */
         return p.type_.accept(new TypeVisitor(), ctx);
       }
     }
 
     // ------------------
-    public class ThrowTypeVisitor implements org.syntax.stella.Absyn.ThrowType.Visitor<Type, Context> {
+    public class ThrowTypeVisitor implements ThrowType.Visitor<Type, Context> {
       public Type visit(
-              org.syntax.stella.Absyn.NoThrowType p,
+              NoThrowType p,
               Context ctx) { /* Code for NoThrowType goes here */
         return null;
       }
 
       public Type visit(
-              org.syntax.stella.Absyn.SomeThrowType p,
+              SomeThrowType p,
               Context ctx) { /* Code for SomeThrowType goes here */
-        for (org.syntax.stella.Absyn.Type x : p.listtype_) {
+        for (Type x : p.listtype_) {
           x.accept(new TypeVisitor(), ctx);
         }
         return null;
@@ -572,13 +603,13 @@ public class VisitTypeCheck {
     /**
      * просто чекаем дуюдикаты
      */
-    public class TypeVisitor implements org.syntax.stella.Absyn.Type.Visitor<Type, Context> {
+    public class TypeVisitor implements Type.Visitor<Type, Context> {
       @Override
-      public Type visit(org.syntax.stella.Absyn.TypeRecord p, Context ctx) {
-        java.util.Set<String> fields = new java.util.HashSet<>();
-        for (org.syntax.stella.Absyn.RecordFieldType f : p.listrecordfieldtype_) {
-          org.syntax.stella.Absyn.ARecordFieldType field =
-                  (org.syntax.stella.Absyn.ARecordFieldType) f;
+      public Type visit(TypeRecord p, Context ctx) {
+        Set<String> fields = new HashSet<>();
+        for (RecordFieldType f : p.listrecordfieldtype_) {
+          ARecordFieldType field =
+                  (ARecordFieldType) f;
 
           if (fields.contains(field.stellaident_)) {
             throw new TypeCheckException(
@@ -594,11 +625,11 @@ public class VisitTypeCheck {
       }
 
       @Override
-      public Type visit(org.syntax.stella.Absyn.TypeVariant p, Context ctx) {
-        java.util.Set<String> labels = new java.util.HashSet<>();
-        for (org.syntax.stella.Absyn.VariantFieldType f : p.listvariantfieldtype_) {
-          org.syntax.stella.Absyn.AVariantFieldType field =
-                  (org.syntax.stella.Absyn.AVariantFieldType) f;
+      public Type visit(TypeVariant p, Context ctx) {
+        Set<String> labels = new HashSet<>();
+        for (VariantFieldType f : p.listvariantfieldtype_) {
+          AVariantFieldType field =
+                  (AVariantFieldType) f;
 
           if (labels.contains(field.stellaident_)) {
             throw new TypeCheckException(
@@ -614,76 +645,76 @@ public class VisitTypeCheck {
       }
 
       // TODO: Diferrence TypeRec vs TypeRecord
-      public Type visit(org.syntax.stella.Absyn.TypeRec p, Context ctx) {
+      public Type visit(TypeRec p, Context ctx) {
         return p;
       }
 
-      public Type visit(org.syntax.stella.Absyn.TypeFun p, Context ctx) {
+      public Type visit(TypeFun p, Context ctx) {
         // assumed that 1 param only
-        for (org.syntax.stella.Absyn.Type paramType : p.listtype_)
+        for (Type paramType : p.listtype_)
           paramType.accept(this, ctx);
         p.type_.accept(this, ctx);
         return p;
       }
 
-      public Type visit(org.syntax.stella.Absyn.TypeTuple p, Context ctx) {
-        for (org.syntax.stella.Absyn.Type t : p.listtype_) t.accept(this, ctx);
+      public Type visit(TypeTuple p, Context ctx) {
+        for (Type t : p.listtype_) t.accept(this, ctx);
         return p;
       }
 
-      public Type visit(org.syntax.stella.Absyn.TypeSum p, Context ctx) {
+      public Type visit(TypeSum p, Context ctx) {
         p.type_1.accept(this, ctx);
         p.type_2.accept(this, ctx);
         return p;
       }
 
-      public Type visit(org.syntax.stella.Absyn.TypeList p, Context ctx) {
+      public Type visit(TypeList p, Context ctx) {
         p.type_.accept(this, ctx);
         return p;
       }
 
-      public Type visit(org.syntax.stella.Absyn.TypeNat p, Context ctx) {
+      public Type visit(TypeNat p, Context ctx) {
         return p;
       }
 
-      public Type visit(org.syntax.stella.Absyn.TypeBool p, Context ctx) {
+      public Type visit(TypeBool p, Context ctx) {
         return p;
       }
 
-      public Type visit(org.syntax.stella.Absyn.TypeUnit p, Context ctx) {
+      public Type visit(TypeUnit p, Context ctx) {
         return p;
       }
 
-      public Type visit(org.syntax.stella.Absyn.TypeAuto p, Context ctx) {
+      public Type visit(TypeAuto p, Context ctx) {
         return p;
       }
 
-      public Type visit(org.syntax.stella.Absyn.TypeForAll p, Context ctx) {
+      public Type visit(TypeForAll p, Context ctx) {
         return p;
       }
 
 
-      public Type visit(org.syntax.stella.Absyn.TypeTop p, Context ctx) {
+      public Type visit(TypeTop p, Context ctx) {
         return p;
       }
 
-      public Type visit(org.syntax.stella.Absyn.TypeBottom p, Context ctx) {
+      public Type visit(TypeBottom p, Context ctx) {
         return p;
       }
 
-      public Type visit(org.syntax.stella.Absyn.TypeRef p, Context ctx) {
+      public Type visit(TypeRef p, Context ctx) {
         p.type_.accept(this, ctx);
         return p;
       }
 
-      public Type visit(org.syntax.stella.Absyn.TypeVar p, Context ctx) {
+      public Type visit(TypeVar p, Context ctx) {
         return p;
       }
     }
 
-    public class MatchCaseVisitor implements org.syntax.stella.Absyn.MatchCase.Visitor<Type, Context> {
+    public class MatchCaseVisitor implements MatchCase.Visitor<Type, Context> {
       public Type visit(
-              org.syntax.stella.Absyn.AMatchCase p,
+              AMatchCase p,
               Context ctx) { /* Code for AMatchCase goes here */
         p.pattern_.accept(new PatternVisitor(), ctx);
         p.expr_.accept(new ExprVisitor(), ctx);
@@ -691,54 +722,54 @@ public class VisitTypeCheck {
       }
     }
 
-    public class OptionalTypingVisitor implements org.syntax.stella.Absyn.OptionalTyping.Visitor<Type, Context> {
+    public class OptionalTypingVisitor implements OptionalTyping.Visitor<Type, Context> {
       public Type visit(
-              org.syntax.stella.Absyn.NoTyping p,
+              NoTyping p,
               Context ctx) {
-        return new org.syntax.stella.Absyn.TypeUnit();
+        return new TypeUnit();
       }
 
       public Type visit(
-              org.syntax.stella.Absyn.SomeTyping p,
+              SomeTyping p,
               Context ctx) {
         p.type_.accept(new TypeVisitor(), ctx);
         return p.type_;
       }
     }
 
-    public class PatternDataVisitor implements org.syntax.stella.Absyn.PatternData.Visitor<Type, Context> {
+    public class PatternDataVisitor implements PatternData.Visitor<Type, Context> {
       public Type visit(
-              org.syntax.stella.Absyn.NoPatternData p,
+              NoPatternData p,
               Context ctx) { /* Code for NoPatternData goes here */
         return null;
       }
 
       public Type visit(
-              org.syntax.stella.Absyn.SomePatternData p,
+              SomePatternData p,
               Context ctx) { /* Code for SomePatternData goes here */
         p.pattern_.accept(new PatternVisitor(), ctx);
         return null;
       }
     }
 
-    public class ExprDataVisitor implements org.syntax.stella.Absyn.ExprData.Visitor<Type, Context> {
+    public class ExprDataVisitor implements ExprData.Visitor<Type, Context> {
       public Type visit(
-              org.syntax.stella.Absyn.NoExprData p,
+              NoExprData p,
               Context ctx) { /* Code for NoExprData goes here */
         return null;
       }
 
       public Type visit(
-              org.syntax.stella.Absyn.SomeExprData p,
+              SomeExprData p,
               Context ctx) { /* Code for SomeExprData goes here */
         p.expr_.accept(new ExprVisitor(), ctx);
         return null;
       }
     }
 
-    public class PatternVisitor implements org.syntax.stella.Absyn.Pattern.Visitor<Type, Context> {
+    public class PatternVisitor implements Pattern.Visitor<Type, Context> {
       public Type visit(
-              org.syntax.stella.Absyn.PatternCastAs p,
+              PatternCastAs p,
               Context ctx) { /* Code for PatternCastAs goes here */
         p.pattern_.accept(new PatternVisitor(), ctx);
         p.type_.accept(new TypeVisitor(), ctx);
@@ -746,7 +777,7 @@ public class VisitTypeCheck {
       }
 
       public Type visit(
-              org.syntax.stella.Absyn.PatternAsc p,
+              PatternAsc p,
               Context ctx) { /* Code for PatternAsc goes here */
         p.pattern_.accept(new PatternVisitor(), ctx);
         p.type_.accept(new TypeVisitor(), ctx);
@@ -754,7 +785,7 @@ public class VisitTypeCheck {
       }
 
       @Override
-      public Type visit(org.syntax.stella.Absyn.PatternVariant p, Context ctx) {
+      public Type visit(PatternVariant p, Context ctx) {
         Type expectedType = ctx.getCurrentExpectedType();
 
         if (!(expectedType instanceof TypeVariant typeVariant)) {
@@ -765,7 +796,7 @@ public class VisitTypeCheck {
           );
         }
 
-        org.syntax.stella.Absyn.AVariantFieldType field =
+        AVariantFieldType field =
                 getAVariantFieldType(p.stellaident_, typeVariant).orElseThrow(
                         () -> new TypeCheckException(
                                 TypeCheckException.ErrorType.ERROR_UNEXPECTED_PATTERN_FOR_TYPE,
@@ -777,23 +808,23 @@ public class VisitTypeCheck {
         Type fieldContentType =
                 field.optionaltyping_.accept(new OptionalTypingVisitor(), ctx);
 
-        if (p.patterndata_ instanceof org.syntax.stella.Absyn.SomePatternData somePat) {
+        if (p.patterndata_ instanceof SomePatternData somePat) {
           ctx.pushExpectedType(fieldContentType);
           somePat.accept(new PatternDataVisitor(), ctx);
           ctx.popExpectedType();
         } else {
           checkForMismatch(fieldContentType,
-                  new org.syntax.stella.Absyn.TypeUnit(), ctx);
+                  new TypeUnit(), ctx);
         }
 
         return expectedType;
       }
 
       public Type visit(
-              org.syntax.stella.Absyn.PatternInl p,
+              PatternInl p,
               Context ctx) { /* Code for PatternInl goes here */
         Type currentExpected = ctx.getCurrentExpectedType();
-        if (!(currentExpected instanceof org.syntax.stella.Absyn.TypeSum sumType)) {
+        if (!(currentExpected instanceof TypeSum sumType)) {
           throw new TypeCheckException(
                   TypeCheckException.ErrorType.ERROR_UNEXPECTED_PATTERN_FOR_TYPE,
                   "Pattern 'inl' requires a Sum type, but got: " + TypePretty.pretty(
@@ -807,10 +838,10 @@ public class VisitTypeCheck {
       }
 
       public Type visit(
-              org.syntax.stella.Absyn.PatternInr p,
+              PatternInr p,
               Context ctx) { /* Code for PatternInr goes here */
         Type currentExpected = ctx.getCurrentExpectedType();
-        if (!(currentExpected instanceof org.syntax.stella.Absyn.TypeSum sumType)) {
+        if (!(currentExpected instanceof TypeSum sumType)) {
           throw new TypeCheckException(
                   TypeCheckException.ErrorType.ERROR_UNEXPECTED_PATTERN_FOR_TYPE,
                   "Pattern 'inr' requires a Sum type, but got: " + TypePretty.pretty(
@@ -824,34 +855,34 @@ public class VisitTypeCheck {
       }
 
       public Type visit(
-              org.syntax.stella.Absyn.PatternTuple p,
+              PatternTuple p,
               Context ctx) { /* Code for PatternTuple goes here */
-        for (org.syntax.stella.Absyn.Pattern x : p.listpattern_) {
+        for (Pattern x : p.listpattern_) {
           x.accept(new PatternVisitor(), ctx);
         }
         return null;
       }
 
       public Type visit(
-              org.syntax.stella.Absyn.PatternRecord p,
+              PatternRecord p,
               Context ctx) { /* Code for PatternRecord goes here */
-        for (org.syntax.stella.Absyn.LabelledPattern x : p.listlabelledpattern_) {
+        for (LabelledPattern x : p.listlabelledpattern_) {
           x.accept(new LabelledPatternVisitor(), ctx);
         }
         return null;
       }
 
       public Type visit(
-              org.syntax.stella.Absyn.PatternList p,
+              PatternList p,
               Context ctx) { /* Code for PatternList goes here */
-        for (org.syntax.stella.Absyn.Pattern x : p.listpattern_) {
+        for (Pattern x : p.listpattern_) {
           x.accept(new PatternVisitor(), ctx);
         }
         return null;
       }
 
       public Type visit(
-              org.syntax.stella.Absyn.PatternCons p,
+              PatternCons p,
               Context ctx) { /* Code for PatternCons goes here */
         p.pattern_1.accept(new PatternVisitor(), ctx);
         p.pattern_2.accept(new PatternVisitor(), ctx);
@@ -859,39 +890,39 @@ public class VisitTypeCheck {
       }
 
       public Type visit(
-              org.syntax.stella.Absyn.PatternFalse p,
+              PatternFalse p,
               Context ctx) { /* Code for PatternFalse goes here */
         return null;
       }
 
       public Type visit(
-              org.syntax.stella.Absyn.PatternTrue p,
+              PatternTrue p,
               Context ctx) { /* Code for PatternTrue goes here */
         return null;
       }
 
       public Type visit(
-              org.syntax.stella.Absyn.PatternUnit p,
+              PatternUnit p,
               Context ctx) { /* Code for PatternUnit goes here */
         return null;
       }
 
       public Type visit(
-              org.syntax.stella.Absyn.PatternInt p,
+              PatternInt p,
               Context ctx) { /* Code for PatternInt goes here */
 
         return null;
       }
 
       public Type visit(
-              org.syntax.stella.Absyn.PatternSucc p,
+              PatternSucc p,
               Context ctx) { /* Code for PatternSucc goes here */
         p.pattern_.accept(new PatternVisitor(), ctx);
         return null;
       }
 
       public Type visit(
-              org.syntax.stella.Absyn.PatternVar p,
+              PatternVar p,
               Context ctx) { /* Code for PatternVar goes here */
         Type currentExpected = ctx.getCurrentExpectedType();
         if (currentExpected == null) {
@@ -907,9 +938,9 @@ public class VisitTypeCheck {
     }
 
     // ------------------
-    public class LabelledPatternVisitor implements org.syntax.stella.Absyn.LabelledPattern.Visitor<Type, Context> {
+    public class LabelledPatternVisitor implements LabelledPattern.Visitor<Type, Context> {
       public Type visit(
-              org.syntax.stella.Absyn.ALabelledPattern p,
+              ALabelledPattern p,
               Context ctx) { /* Code for ALabelledPattern goes here */
 
         p.pattern_.accept(new PatternVisitor(), ctx);
@@ -917,18 +948,18 @@ public class VisitTypeCheck {
       }
     }
 
-    public class BindingVisitor implements org.syntax.stella.Absyn.Binding.Visitor<Type, Context> {
+    public class BindingVisitor implements Binding.Visitor<Type, Context> {
       public Type visit(
-              org.syntax.stella.Absyn.ABinding p,
+              ABinding p,
               Context ctx) { /* Code for ABinding goes here */
 
         return p.expr_.accept(new ExprVisitor(), ctx);
       }
     }
 
-    public class ExprVisitor implements org.syntax.stella.Absyn.Expr.Visitor<Type, Context> {
+    public class ExprVisitor implements Expr.Visitor<Type, Context> {
       public Type visit(
-              org.syntax.stella.Absyn.Sequence p,
+              Sequence p,
               Context ctx) { /* Code for Sequence goes here */
         ctx.pushExpectedType(new TypeUnit());
         Type t1 = p.expr_1.accept(this, ctx);
@@ -946,10 +977,10 @@ public class VisitTypeCheck {
       }
 
       public Type visit(
-              org.syntax.stella.Absyn.Let p,
+              Let p,
               Context ctx) { /* Code for Let goes here */
         ctx.enterScope();
-        for (org.syntax.stella.Absyn.PatternBinding x : p.listpatternbinding_) {
+        for (PatternBinding x : p.listpatternbinding_) {
           x.accept(new PatternBindingVisitor(), ctx);
         }
         Type bodyType = p.expr_.accept(new ExprVisitor(), ctx);
@@ -959,9 +990,9 @@ public class VisitTypeCheck {
 
       // TODO: нужно?
       public Type visit(
-              org.syntax.stella.Absyn.LetRec p,
+              LetRec p,
               Context ctx) { /* Code for LetRec goes here */
-        for (org.syntax.stella.Absyn.PatternBinding x : p.listpatternbinding_) {
+        for (PatternBinding x : p.listpatternbinding_) {
           x.accept(new PatternBindingVisitor(), ctx);
         }
         p.expr_.accept(new ExprVisitor(), ctx);
@@ -970,18 +1001,18 @@ public class VisitTypeCheck {
 
       // its fot Genretics
       public Type visit(
-              org.syntax.stella.Absyn.TypeAbstraction p,
+              TypeAbstraction p,
               Context ctx) { /* Code for TypeAbstraction goes here */
         p.expr_.accept(new ExprVisitor(), ctx);
         return null;
       }
 
-      public Type visit(org.syntax.stella.Absyn.Assign p, Context ctx) {
+      public Type visit(Assign p, Context ctx) {
         ctx.pushExpectedType(null);
         Type lhsType = p.expr_1.accept(this, ctx);
         ctx.popExpectedType();
 
-        if (!(lhsType instanceof org.syntax.stella.Absyn.TypeRef tr)) {
+        if (!(lhsType instanceof TypeRef tr)) {
           throw new TypeCheckException(
                   TypeCheckException.ErrorType.ERROR_NOT_A_REFERENCE,
                   "Left side of assignment must be a reference, but got: " + TypePretty.pretty(
@@ -996,10 +1027,10 @@ public class VisitTypeCheck {
 
         checkForMismatch(expectedValueType, rhsType, ctx);
 
-        return new org.syntax.stella.Absyn.TypeUnit();
+        return new TypeUnit();
       }
 
-      public Type visit(org.syntax.stella.Absyn.If p, Context ctx) {
+      public Type visit(If p, Context ctx) {
         ctx.pushExpectedType(new TypeBool());
         Type t1 = p.expr_1.accept(this, ctx);
         ctx.popExpectedType();
@@ -1034,7 +1065,7 @@ public class VisitTypeCheck {
       }
 
       public Type visit(
-              org.syntax.stella.Absyn.LessThan p,
+              LessThan p,
               Context ctx) { /* Code for LessThan goes here */
         p.expr_1.accept(new ExprVisitor(), ctx);
         p.expr_2.accept(new ExprVisitor(), ctx);
@@ -1042,7 +1073,7 @@ public class VisitTypeCheck {
       }
 
       public Type visit(
-              org.syntax.stella.Absyn.LessThanOrEqual p,
+              LessThanOrEqual p,
               Context ctx) { /* Code for LessThanOrEqual goes here */
         p.expr_1.accept(new ExprVisitor(), ctx);
         p.expr_2.accept(new ExprVisitor(), ctx);
@@ -1050,7 +1081,7 @@ public class VisitTypeCheck {
       }
 
       public Type visit(
-              org.syntax.stella.Absyn.GreaterThan p,
+              GreaterThan p,
               Context ctx) { /* Code for GreaterThan goes here */
         p.expr_1.accept(new ExprVisitor(), ctx);
         p.expr_2.accept(new ExprVisitor(), ctx);
@@ -1058,7 +1089,7 @@ public class VisitTypeCheck {
       }
 
       public Type visit(
-              org.syntax.stella.Absyn.GreaterThanOrEqual p,
+              GreaterThanOrEqual p,
               Context ctx) { /* Code for GreaterThanOrEqual goes here */
         p.expr_1.accept(new ExprVisitor(), ctx);
         p.expr_2.accept(new ExprVisitor(), ctx);
@@ -1066,7 +1097,7 @@ public class VisitTypeCheck {
       }
 
       public Type visit(
-              org.syntax.stella.Absyn.Equal p,
+              Equal p,
               Context ctx) { /* Code for Equal goes here */
         p.expr_1.accept(new ExprVisitor(), ctx);
         p.expr_2.accept(new ExprVisitor(), ctx);
@@ -1074,7 +1105,7 @@ public class VisitTypeCheck {
       }
 
       public Type visit(
-              org.syntax.stella.Absyn.NotEqual p,
+              NotEqual p,
               Context ctx) { /* Code for NotEqual goes here */
         p.expr_1.accept(new ExprVisitor(), ctx);
         p.expr_2.accept(new ExprVisitor(), ctx);
@@ -1089,7 +1120,7 @@ public class VisitTypeCheck {
        * @return
        */
       public Type visit(
-              org.syntax.stella.Absyn.TypeAsc p,
+              TypeAsc p,
               Context ctx) { /* Code for TypeAsc goes here */
         var expectedType = p.type_.accept(new TypeVisitor(), ctx);
         ctx.pushExpectedType(expectedType);
@@ -1100,7 +1131,7 @@ public class VisitTypeCheck {
       }
 
       public Type visit(
-              org.syntax.stella.Absyn.TypeCast p,
+              TypeCast p,
               Context ctx) {
         // 1. Проверяем выражение внутри каста (ожидаемый тип неизвестен, поэтому null)
         ctx.pushExpectedType(null);
@@ -1119,7 +1150,7 @@ public class VisitTypeCheck {
        * @param ctx
        * @return TODO: чекнуть работу
        */
-      public Type visit(org.syntax.stella.Absyn.Abstraction p, Context ctx) {
+      public Type visit(Abstraction p, Context ctx) {
         Type expected = ctx.getCurrentExpectedType();
         checkThatExpectedTypeIsFunction(expected);
         AParamDecl declaredParam = (AParamDecl) p.listparamdecl_.getFirst();
@@ -1165,11 +1196,11 @@ public class VisitTypeCheck {
       }
 
       @Override
-      public Type visit(org.syntax.stella.Absyn.Variant p, Context ctx) {
+      public Type visit(Variant p, Context ctx) {
         checkForAmbiguousVariantType(p, ctx.getCurrentExpectedType());
         TypeVariant typeVariant = checkThatWeExpectVariantTypeFromAbove(ctx);
 
-        org.syntax.stella.Absyn.AVariantFieldType field =
+        AVariantFieldType field =
                 getAVariantFieldType(p.stellaident_, typeVariant).orElseThrow(
                         () -> new TypeCheckException(
                                 TypeCheckException.ErrorType.ERROR_UNEXPECTED_VARIANT_LABEL,
@@ -1178,13 +1209,13 @@ public class VisitTypeCheck {
         Type fieldType =
                 field.optionaltyping_.accept(new OptionalTypingVisitor(), ctx);
 
-        if (p.exprdata_ instanceof org.syntax.stella.Absyn.SomeExprData data) {
+        if (p.exprdata_ instanceof SomeExprData data) {
           ctx.pushExpectedType(fieldType);
           Type actualType = data.expr_.accept(this, ctx);
           ctx.popExpectedType();
           checkForMismatch(fieldType, actualType, ctx);
         } else {
-          checkForMismatch(fieldType, new org.syntax.stella.Absyn.TypeUnit(),
+          checkForMismatch(fieldType, new TypeUnit(),
                   ctx);
         }
 
@@ -1221,7 +1252,7 @@ public class VisitTypeCheck {
        * 2. Мы уже вывели тип из предыдущих кейсов
        */
       @Override
-      public Type visit(org.syntax.stella.Absyn.Match p, Context ctx) {
+      public Type visit(Match p, Context ctx) {
         // обнуляем для кейса
         /**
          * fn f() -> Bool {
@@ -1241,15 +1272,15 @@ public class VisitTypeCheck {
         Type outerExpected = ctx.getCurrentExpectedType();
         Type inferredReturnType = null;
 
-        for (org.syntax.stella.Absyn.MatchCase matchCase : p.listmatchcase_) {
-          org.syntax.stella.Absyn.AMatchCase c =
-                  (org.syntax.stella.Absyn.AMatchCase) matchCase;
+        for (MatchCase matchCase : p.listmatchcase_) {
+          AMatchCase c =
+                  (AMatchCase) matchCase;
 
-          if (c.pattern_ instanceof org.syntax.stella.Absyn.PatternInl) {
+          if (c.pattern_ instanceof PatternInl) {
             checkedInl = true;
-          } else if (c.pattern_ instanceof org.syntax.stella.Absyn.PatternInr) {
+          } else if (c.pattern_ instanceof PatternInr) {
             checkedInr = true;
-          } else if (c.pattern_ instanceof org.syntax.stella.Absyn.PatternVar) {
+          } else if (c.pattern_ instanceof PatternVar) {
             checkedVar = true;
           } else if (c.pattern_ instanceof PatternVariant variantPattern) {
             matchedVariantLabels.add(variantPattern.stellaident_);
@@ -1356,7 +1387,7 @@ public class VisitTypeCheck {
                 chekForAmbiguityOrReturnTypeBottom(p, ctx, expectedElementType);
         Type finalElementType = expectedElementType;
 
-        for (org.syntax.stella.Absyn.Expr expr : p.listexpr_) {
+        for (Expr expr : p.listexpr_) {
           ctx.pushExpectedType(finalElementType);
           Type itemType = expr.accept(this, ctx);
           ctx.popExpectedType();
@@ -1368,7 +1399,7 @@ public class VisitTypeCheck {
           }
         }
 
-        return new org.syntax.stella.Absyn.TypeList(finalElementType);
+        return new TypeList(finalElementType);
       }
 
       private Type chekForAmbiguityOrReturnTypeBottom(
@@ -1402,7 +1433,7 @@ public class VisitTypeCheck {
 
 
       public Type visit(
-              org.syntax.stella.Absyn.Add p,
+              Add p,
               Context ctx) { /* Code for Add goes here */
         var t1 = p.expr_1.accept(new ExprVisitor(), ctx);
         var t2 = p.expr_2.accept(new ExprVisitor(), ctx);
@@ -1413,7 +1444,7 @@ public class VisitTypeCheck {
       }
 
       public Type visit(
-              org.syntax.stella.Absyn.Subtract p,
+              Subtract p,
               Context ctx) { /* Code for Subtract goes here */
         var t1 = p.expr_1.accept(new ExprVisitor(), ctx);
         var t2 = p.expr_2.accept(new ExprVisitor(), ctx);
@@ -1423,7 +1454,7 @@ public class VisitTypeCheck {
       }
 
       public Type visit(
-              org.syntax.stella.Absyn.LogicOr p,
+              LogicOr p,
               Context ctx) { /* Code for LogicOr goes here */
         var t1 = p.expr_1.accept(new ExprVisitor(), ctx);
         var t2 = p.expr_2.accept(new ExprVisitor(), ctx);
@@ -1433,7 +1464,7 @@ public class VisitTypeCheck {
       }
 
       public Type visit(
-              org.syntax.stella.Absyn.Multiply p,
+              Multiply p,
               Context ctx) { /* Code for Multiply goes here */
         var t1 = p.expr_1.accept(new ExprVisitor(), ctx);
         var t2 = p.expr_2.accept(new ExprVisitor(), ctx);
@@ -1443,7 +1474,7 @@ public class VisitTypeCheck {
       }
 
       public Type visit(
-              org.syntax.stella.Absyn.Divide p,
+              Divide p,
               Context ctx) { /* Code for Divide goes here */
         var t1 = p.expr_1.accept(new ExprVisitor(), ctx);
         var t2 = p.expr_2.accept(new ExprVisitor(), ctx);
@@ -1453,7 +1484,7 @@ public class VisitTypeCheck {
       }
 
       public Type visit(
-              org.syntax.stella.Absyn.LogicAnd p,
+              LogicAnd p,
               Context ctx) { /* Code for LogicAnd goes here */
         var t1 = p.expr_1.accept(new ExprVisitor(), ctx);
         var t2 = p.expr_2.accept(new ExprVisitor(), ctx);
@@ -1463,13 +1494,13 @@ public class VisitTypeCheck {
       }
 
       public Type visit(
-              org.syntax.stella.Absyn.Ref p,
+              Ref p,
               Context ctx) {
         Type expected = ctx.getCurrentExpectedType();
         Type expectedInner = null;
 
         if (expected != null) {
-          if (expected instanceof org.syntax.stella.Absyn.TypeRef tr) {
+          if (expected instanceof TypeRef tr) {
             expectedInner = tr.type_;
           } else {
             throw new TypeCheckException(
@@ -1484,14 +1515,14 @@ public class VisitTypeCheck {
         Type innerType = p.expr_.accept(this, ctx);
         ctx.popExpectedType();
 
-        return new org.syntax.stella.Absyn.TypeRef(innerType);
+        return new TypeRef(innerType);
       }
 
-      public Type visit(org.syntax.stella.Absyn.Deref p, Context ctx) {
+      public Type visit(Deref p, Context ctx) {
         Type expected = ctx.getCurrentExpectedType();
 
         if (expected != null) {
-          ctx.pushExpectedType(new org.syntax.stella.Absyn.TypeRef(expected));
+          ctx.pushExpectedType(new TypeRef(expected));
         } else {
           ctx.pushExpectedType(null);
         }
@@ -1499,7 +1530,7 @@ public class VisitTypeCheck {
         Type innerType = p.expr_.accept(this, ctx);
         ctx.popExpectedType();
 
-        if (innerType instanceof org.syntax.stella.Absyn.TypeRef tr) {
+        if (innerType instanceof TypeRef tr) {
           return tr.type_;
         } else {
           throw new TypeCheckException(
@@ -1510,7 +1541,7 @@ public class VisitTypeCheck {
         }
       }
 
-      public Type visit(org.syntax.stella.Absyn.Application p, Context ctx) {
+      public Type visit(Application p, Context ctx) {
         ctx.pushExpectedType(null);
         var t1 = p.expr_.accept(new ExprVisitor(), ctx);
         ctx.popExpectedType();
@@ -1532,10 +1563,10 @@ public class VisitTypeCheck {
 
 
       public Type visit(
-              org.syntax.stella.Absyn.TypeApplication p,
+              TypeApplication p,
               Context ctx) { /* Code for TypeApplication goes here */
         p.expr_.accept(new ExprVisitor(), ctx);
-        for (org.syntax.stella.Absyn.Type x : p.listtype_) {
+        for (Type x : p.listtype_) {
           x.accept(new TypeVisitor(), ctx);
         }
         return null;
@@ -1549,7 +1580,7 @@ public class VisitTypeCheck {
        * @param ctx
        * @return
        */
-      public Type visit(org.syntax.stella.Absyn.DotRecord p, Context ctx) {
+      public Type visit(DotRecord p, Context ctx) {
         ctx.pushExpectedType(null);
         Type leftType = p.expr_.accept(new ExprVisitor(), ctx);
         ctx.popExpectedType();
@@ -1589,7 +1620,7 @@ public class VisitTypeCheck {
       }
 
       public Type visit(
-              org.syntax.stella.Absyn.DotTuple p,
+              DotTuple p,
 
               Context ctx) { /* Code for DotTuple goes here */
         ctx.pushExpectedType(null); // нужно?
@@ -1623,7 +1654,7 @@ public class VisitTypeCheck {
         }
       }
 
-      public Type visit(org.syntax.stella.Absyn.Tuple p, Context ctx) {
+      public Type visit(Tuple p, Context ctx) {
         Optional<TypeTuple> expectedTuple = Optional.empty();
         if (ctx.getCurrentExpectedType() != null) {
           if (ctx.getCurrentExpectedType() instanceof TypeTuple) {
@@ -1638,7 +1669,7 @@ public class VisitTypeCheck {
         }
         ListType componentTypes = new ListType();
         for (int i = 0; i < p.listexpr_.size(); i++) {
-          org.syntax.stella.Absyn.Expr expr = p.listexpr_.get(i);
+          Expr expr = p.listexpr_.get(i);
 
           /**
            * если у нас есть ожидаемый тип кортежа сверху,
@@ -1692,19 +1723,19 @@ public class VisitTypeCheck {
        * @param ctx
        * @return
        */
-      public Type visit(org.syntax.stella.Absyn.Record p, Context ctx) {
-        org.syntax.stella.Absyn.ListRecordFieldType fieldTypes =
-                new org.syntax.stella.Absyn.ListRecordFieldType();
-        java.util.Set<String> seenFields = new java.util.HashSet<>();
+      public Type visit(Record p, Context ctx) {
+        ListRecordFieldType fieldTypes =
+                new ListRecordFieldType();
+        Set<String> seenFields = new HashSet<>();
 
         TypeRecord expectedRecord = null;
         if (ctx.getCurrentExpectedType() != null) {
           expectedRecord = chekIfExprectedTypeIsRecord(ctx);
         }
 
-        for (org.syntax.stella.Absyn.Binding binding : p.listbinding_) {
-          org.syntax.stella.Absyn.ABinding b =
-                  (org.syntax.stella.Absyn.ABinding) binding;
+        for (Binding binding : p.listbinding_) {
+          ABinding b =
+                  (ABinding) binding;
 
           // чекаем кейс  {a=1, a=2}
           if (seenFields.contains(b.stellaident_)) {
@@ -1736,12 +1767,12 @@ public class VisitTypeCheck {
           }
 
           fieldTypes.add(
-                  new org.syntax.stella.Absyn.ARecordFieldType(
+                  new ARecordFieldType(
                           b.stellaident_, fieldType));
         }
 
         TypeRecord actualType =
-                new org.syntax.stella.Absyn.TypeRecord(fieldTypes);
+                new TypeRecord(fieldTypes);
         if (expectedRecord != null) {
           checkRecordMismatch(expectedRecord, actualType, ctx);
         }
@@ -1776,8 +1807,8 @@ public class VisitTypeCheck {
         return Optional.empty();
       }
 
-      public org.syntax.stella.Absyn.TypeList checkThatTypeIsList(Type type) {
-        if (!(type instanceof org.syntax.stella.Absyn.TypeList listType)) {
+      public TypeList checkThatTypeIsList(Type type) {
+        if (!(type instanceof TypeList listType)) {
           throw new TypeCheckException(
                   TypeCheckException.ErrorType.ERROR_NOT_A_LIST,
                   "Expected a list type but got: " + TypePretty.pretty(type)
@@ -1795,7 +1826,7 @@ public class VisitTypeCheck {
        * @return
        */
       @Override
-      public Type visit(org.syntax.stella.Absyn.ConsList p, Context ctx) {
+      public Type visit(ConsList p, Context ctx) {
         Type expectedElementType = null;
 
         expectedElementType =
@@ -1809,8 +1840,8 @@ public class VisitTypeCheck {
           checkForMismatch(expectedElementType, headType, ctx);
         }
 
-        org.syntax.stella.Absyn.TypeList expectedTailType =
-                new org.syntax.stella.Absyn.TypeList(expectedElementType);
+        TypeList expectedTailType =
+                new TypeList(expectedElementType);
 
         Type tailType = checkTail(p, ctx, expectedTailType);
 
@@ -1852,30 +1883,30 @@ public class VisitTypeCheck {
 
 
       @Override
-      public Type visit(org.syntax.stella.Absyn.Head p, Context ctx) {
+      public Type visit(Head p, Context ctx) {
         ctx.pushExpectedType(null);
         Type listExprType = p.expr_.accept(this, ctx);
         ctx.popExpectedType();
 
-        org.syntax.stella.Absyn.TypeList listType =
+        TypeList listType =
                 checkThatTypeIsList(listExprType);
 
         return listType.type_;
       }
 
       @Override
-      public Type visit(org.syntax.stella.Absyn.IsEmpty p, Context ctx) {
+      public Type visit(IsEmpty p, Context ctx) {
         ctx.pushExpectedType(null);
         Type listExprType = p.expr_.accept(this, ctx);
         ctx.popExpectedType();
 
         checkThatTypeIsList(listExprType);
 
-        return new org.syntax.stella.Absyn.TypeBool();
+        return new TypeBool();
       }
 
       @Override
-      public Type visit(org.syntax.stella.Absyn.Tail p, Context ctx) {
+      public Type visit(Tail p, Context ctx) {
         ctx.pushExpectedType(null);
         Type listExprType = p.expr_.accept(this, ctx);
         ctx.popExpectedType();
@@ -1883,7 +1914,7 @@ public class VisitTypeCheck {
         return checkThatTypeIsList(listExprType);
       }
 
-      public Type visit(org.syntax.stella.Absyn.Panic p, Context ctx) {
+      public Type visit(Panic p, Context ctx) {
         Type expected = ctx.getCurrentExpectedType();
 
         if (expected != null) {
@@ -1891,7 +1922,7 @@ public class VisitTypeCheck {
         }
 
         if (ctx.isAmbiguousAsBottom()) {
-          return new org.syntax.stella.Absyn.TypeBottom();
+          return new TypeBottom();
         }
 
         throw new TypeCheckException(
@@ -1900,7 +1931,7 @@ public class VisitTypeCheck {
         );
       }
 
-      public Type visit(org.syntax.stella.Absyn.Throw p, Context ctx) {
+      public Type visit(Throw p, Context ctx) {
         Type expected = ctx.getCurrentExpectedType();
 
         Type exceptionType = ctx.getExceptionType()
@@ -1914,7 +1945,7 @@ public class VisitTypeCheck {
 
         if (expected == null) {
           if (ctx.isAmbiguousAsBottom()) {
-            return new org.syntax.stella.Absyn.TypeBottom();
+            return new TypeBottom();
           }
           throw new TypeCheckException(
                   TypeCheckException.ErrorType.ERROR_AMBIGUOUS_THROW_TYPE,
@@ -1925,7 +1956,7 @@ public class VisitTypeCheck {
         return expected;
       }
 
-      public Type visit(org.syntax.stella.Absyn.TryCatch p, Context ctx) {
+      public Type visit(TryCatch p, Context ctx) {
         Type tryType = p.expr_1.accept(new ExprVisitor(), ctx);
 
         Type exceptionType = ctx.getExceptionType().orElseThrow(() -> new TypeCheckException(
@@ -1947,7 +1978,7 @@ public class VisitTypeCheck {
         return tryType;
       }
 
-      public Type visit(org.syntax.stella.Absyn.TryWith p, Context ctx) {
+      public Type visit(TryWith p, Context ctx) {
         Type tryType = p.expr_1.accept(new ExprVisitor(), ctx);
 
         ctx.pushExpectedType(tryType);
@@ -1958,7 +1989,7 @@ public class VisitTypeCheck {
       }
 
       public Type visit(
-              org.syntax.stella.Absyn.TryCastAs p,
+              TryCastAs p,
               Context ctx) { /* Code for TryCastAs goes here */
         p.expr_1.accept(new ExprVisitor(), ctx);
         p.type_.accept(new TypeVisitor(), ctx);
@@ -1969,7 +2000,7 @@ public class VisitTypeCheck {
       }
 
       public Type visit(
-              org.syntax.stella.Absyn.Inl p,
+              Inl p,
               Context ctx) { /* Code for Inl goes here */
         Type currentExpected = ctx.getCurrentExpectedType();
         checkForAmbiguousSumType(currentExpected);
@@ -1982,7 +2013,7 @@ public class VisitTypeCheck {
       }
 
       public Type visit(
-              org.syntax.stella.Absyn.Inr p,
+              Inr p,
               Context ctx) { /* Code for Inr goes here */
         Type currentExpected = ctx.getCurrentExpectedType();
         checkForAmbiguousSumType(currentExpected);
@@ -2018,7 +2049,7 @@ public class VisitTypeCheck {
 
 
       public Type visit(
-              org.syntax.stella.Absyn.Succ p,
+              Succ p,
               Context ctx) { /* Code for Succ goes here */
         var t1 = p.expr_.accept(new ExprVisitor(), ctx);
         checkThatTypeIsNat(t1);
@@ -2026,7 +2057,7 @@ public class VisitTypeCheck {
       }
 
       public Type visit(
-              org.syntax.stella.Absyn.LogicNot p,
+              LogicNot p,
               Context ctx) { /* Code for LogicNot goes here */
         var t1 = p.expr_.accept(new ExprVisitor(), ctx);
         checkThatTypeIsBool(t1);
@@ -2034,7 +2065,7 @@ public class VisitTypeCheck {
       }
 
       public Type visit(
-              org.syntax.stella.Absyn.Pred p,
+              Pred p,
               Context ctx) { /* Code for Pred goes here */
         var t1 = p.expr_.accept(new ExprVisitor(), ctx);
         checkThatTypeIsNat(t1);
@@ -2042,7 +2073,7 @@ public class VisitTypeCheck {
       }
 
       public Type visit(
-              org.syntax.stella.Absyn.IsZero p,
+              IsZero p,
               Context ctx) { /* Code for IsZero goes here */
         var t1 = p.expr_.accept(new ExprVisitor(), ctx);
         checkThatTypeIsNat(t1);
@@ -2052,7 +2083,7 @@ public class VisitTypeCheck {
       // Γ ` t1 : T1→T1
       //---------------------
       //Γ ` fix t1 : T1
-      public Type visit(org.syntax.stella.Absyn.Fix p, Context ctx) {
+      public Type visit(Fix p, Context ctx) {
         /**
          * если нам сверху сказали, что fix должен вернуть тип T, то
          * функция, которую мы передаем в fix (expr), должна быть типа T -> T
@@ -2090,7 +2121,7 @@ public class VisitTypeCheck {
         return funType;
       }
 
-      public Type visit(org.syntax.stella.Absyn.NatRec p, Context ctx) {
+      public Type visit(NatRec p, Context ctx) {
         ctx.pushExpectedType(new TypeNat());
         var t1 = p.expr_1.accept(new ExprVisitor(), ctx);
         ctx.popExpectedType();
@@ -2126,7 +2157,7 @@ public class VisitTypeCheck {
       }
 
       public Type visit(
-              org.syntax.stella.Absyn.Fold p,
+              Fold p,
               Context ctx) { /* Code for Fold goes here */
         p.type_.accept(new TypeVisitor(), ctx);
         p.expr_.accept(new ExprVisitor(), ctx);
@@ -2134,7 +2165,7 @@ public class VisitTypeCheck {
       }
 
       public Type visit(
-              org.syntax.stella.Absyn.Unfold p,
+              Unfold p,
               Context ctx) { /* Code for Unfold goes here */
         p.type_.accept(new TypeVisitor(), ctx);
         p.expr_.accept(new ExprVisitor(), ctx);
@@ -2142,25 +2173,25 @@ public class VisitTypeCheck {
       }
 
       public Type visit(
-              org.syntax.stella.Absyn.ConstTrue p,
+              ConstTrue p,
               Context ctx) { /* Code for ConstTrue goes here */
         return new TypeBool();
       }
 
       public Type visit(
-              org.syntax.stella.Absyn.ConstFalse p,
+              ConstFalse p,
               Context ctx) { /* Code for ConstFalse goes here */
         return new TypeBool();
       }
 
       public Type visit(
-              org.syntax.stella.Absyn.ConstUnit p,
+              ConstUnit p,
               Context ctx) { /* Code for ConstUnit goes here */
         return new TypeUnit();
       }
 
       public Type visit(
-              org.syntax.stella.Absyn.ConstInt p,
+              ConstInt p,
               Context ctx) { /* Code for ConstInt goes here */
         if (p.integer_ < 0) {
           throw new TypeCheckException(
@@ -2171,13 +2202,13 @@ public class VisitTypeCheck {
         return new TypeNat();
       }
 
-      public Type visit(org.syntax.stella.Absyn.ConstMemory p, Context ctx) {
+      public Type visit(ConstMemory p, Context ctx) {
         Type expected = ctx.getCurrentExpectedType();
 
         if (expected == null) {
           if (ctx.isAmbiguousAsBottom()) {
-            return new org.syntax.stella.Absyn.TypeRef(
-                    new org.syntax.stella.Absyn.TypeBottom()); // или не
+            return new TypeRef(
+                    new TypeBottom()); // или не
             // оборачивать?
           }
           throw new TypeCheckException(
@@ -2186,7 +2217,7 @@ public class VisitTypeCheck {
           );
         }
 
-        if (!(expected instanceof org.syntax.stella.Absyn.TypeRef)) {
+        if (!(expected instanceof TypeRef)) {
           throw new TypeCheckException(
                   TypeCheckException.ErrorType.ERROR_UNEXPECTED_MEMORY_ADDRESS,
                   "A memory address was used where a non-reference type was expected. Expected: " + TypePretty.pretty(
@@ -2198,7 +2229,7 @@ public class VisitTypeCheck {
       }
 
       public Type visit(
-              org.syntax.stella.Absyn.Var p,
+              Var p,
               Context ctx) { /* Code for Var goes here */
         return ctx.lookup(p.stellaident_)
                 .orElseThrow(() -> new TypeCheckException(
@@ -2208,9 +2239,9 @@ public class VisitTypeCheck {
       }
     }
 
-    public class PatternBindingVisitor implements org.syntax.stella.Absyn.PatternBinding.Visitor<Type, Context> {
+    public class PatternBindingVisitor implements PatternBinding.Visitor<Type, Context> {
       public Type visit(
-              org.syntax.stella.Absyn.APatternBinding p,
+              APatternBinding p,
               Context ctx) {
 
         // сначала infer правую часть (expr)
@@ -2226,24 +2257,24 @@ public class VisitTypeCheck {
       }
     }
 
-    public class VariantFieldTypeVisitor implements org.syntax.stella.Absyn.VariantFieldType.Visitor<Type, Context> {
+    public class VariantFieldTypeVisitor implements VariantFieldType.Visitor<Type, Context> {
       public Type visit(
-              org.syntax.stella.Absyn.AVariantFieldType p, Context ctx) {
+              AVariantFieldType p, Context ctx) {
         return p.optionaltyping_.accept(new OptionalTypingVisitor(), ctx);
       }
     }
 
-    public class RecordFieldTypeVisitor implements org.syntax.stella.Absyn.RecordFieldType.Visitor<Type, Context> {
+    public class RecordFieldTypeVisitor implements RecordFieldType.Visitor<Type, Context> {
       public Type visit(
-              org.syntax.stella.Absyn.ARecordFieldType p,
+              ARecordFieldType p,
               Context ctx) { /* Code for ARecordFieldType goes here */
 
         return p.type_.accept(new TypeVisitor(), ctx);
       }
     }
 
-    public class TypingVisitor implements org.syntax.stella.Absyn.Typing.Visitor<Type, Context> {
-      public Type visit(org.syntax.stella.Absyn.ATyping p, Context ctx) {
+    public class TypingVisitor implements Typing.Visitor<Type, Context> {
+      public Type visit(ATyping p, Context ctx) {
         Type expectedType = p.type_.accept(new TypeVisitor(), ctx);
 
         ctx.pushExpectedType(expectedType);

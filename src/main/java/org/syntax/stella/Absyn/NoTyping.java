@@ -6,11 +6,11 @@ public class NoTyping  extends OptionalTyping {
   public int line_num, col_num, offset;
   public NoTyping() { }
 
-  public <R,A> R accept(org.syntax.stella.Absyn.OptionalTyping.Visitor<R,A> v, A arg) { return v.visit(this, arg); }
+  public <R,A> R accept(OptionalTyping.Visitor<R,A> v, A arg) { return v.visit(this, arg); }
 
-  public boolean equals(java.lang.Object o) {
+  public boolean equals(Object o) {
     if (this == o) return true;
-    if (o instanceof org.syntax.stella.Absyn.NoTyping) {
+    if (o instanceof NoTyping) {
       return true;
     }
     return false;

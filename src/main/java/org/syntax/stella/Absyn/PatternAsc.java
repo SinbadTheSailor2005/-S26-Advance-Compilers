@@ -8,12 +8,12 @@ public class PatternAsc  extends Pattern {
   public int line_num, col_num, offset;
   public PatternAsc(Pattern p1, Type p2) { pattern_ = p1; type_ = p2; }
 
-  public <R,A> R accept(org.syntax.stella.Absyn.Pattern.Visitor<R,A> v, A arg) { return v.visit(this, arg); }
+  public <R,A> R accept(Pattern.Visitor<R,A> v, A arg) { return v.visit(this, arg); }
 
-  public boolean equals(java.lang.Object o) {
+  public boolean equals(Object o) {
     if (this == o) return true;
-    if (o instanceof org.syntax.stella.Absyn.PatternAsc) {
-      org.syntax.stella.Absyn.PatternAsc x = (org.syntax.stella.Absyn.PatternAsc)o;
+    if (o instanceof PatternAsc) {
+      PatternAsc x = (PatternAsc)o;
       return this.pattern_.equals(x.pattern_) && this.type_.equals(x.type_);
     }
     return false;

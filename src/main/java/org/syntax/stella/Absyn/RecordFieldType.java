@@ -2,10 +2,12 @@
 
 package org.syntax.stella.Absyn;
 
-public abstract class RecordFieldType implements java.io.Serializable {
+import java.io.Serializable;
+
+public abstract class RecordFieldType implements Serializable {
   public abstract <R,A> R accept(RecordFieldType.Visitor<R,A> v, A arg);
   public interface Visitor <R,A> {
-    public R visit(org.syntax.stella.Absyn.ARecordFieldType p, A arg);
+    public R visit(ARecordFieldType p, A arg);
 
   }
 

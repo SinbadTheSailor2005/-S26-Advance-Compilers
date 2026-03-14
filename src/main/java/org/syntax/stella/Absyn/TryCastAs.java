@@ -9,12 +9,12 @@ public class TryCastAs  extends Expr {
   public int line_num, col_num, offset;
   public TryCastAs(Expr p1, Type p2, Pattern p3, Expr p4, Expr p5) { expr_1 = p1; type_ = p2; pattern_ = p3; expr_2 = p4; expr_3 = p5; }
 
-  public <R,A> R accept(org.syntax.stella.Absyn.Expr.Visitor<R,A> v, A arg) { return v.visit(this, arg); }
+  public <R,A> R accept(Expr.Visitor<R,A> v, A arg) { return v.visit(this, arg); }
 
-  public boolean equals(java.lang.Object o) {
+  public boolean equals(Object o) {
     if (this == o) return true;
-    if (o instanceof org.syntax.stella.Absyn.TryCastAs) {
-      org.syntax.stella.Absyn.TryCastAs x = (org.syntax.stella.Absyn.TryCastAs)o;
+    if (o instanceof TryCastAs) {
+      TryCastAs x = (TryCastAs)o;
       return this.expr_1.equals(x.expr_1) && this.type_.equals(x.type_) && this.pattern_.equals(x.pattern_) && this.expr_2.equals(x.expr_2) && this.expr_3.equals(x.expr_3);
     }
     return false;

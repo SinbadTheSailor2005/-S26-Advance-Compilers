@@ -7,12 +7,12 @@ public class PatternInr  extends Pattern {
   public int line_num, col_num, offset;
   public PatternInr(Pattern p1) { pattern_ = p1; }
 
-  public <R,A> R accept(org.syntax.stella.Absyn.Pattern.Visitor<R,A> v, A arg) { return v.visit(this, arg); }
+  public <R,A> R accept(Pattern.Visitor<R,A> v, A arg) { return v.visit(this, arg); }
 
-  public boolean equals(java.lang.Object o) {
+  public boolean equals(Object o) {
     if (this == o) return true;
-    if (o instanceof org.syntax.stella.Absyn.PatternInr) {
-      org.syntax.stella.Absyn.PatternInr x = (org.syntax.stella.Absyn.PatternInr)o;
+    if (o instanceof PatternInr) {
+      PatternInr x = (PatternInr)o;
       return this.pattern_.equals(x.pattern_);
     }
     return false;

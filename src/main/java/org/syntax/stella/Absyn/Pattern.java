@@ -2,24 +2,26 @@
 
 package org.syntax.stella.Absyn;
 
-public abstract class Pattern implements java.io.Serializable {
+import java.io.Serializable;
+
+public abstract class Pattern implements Serializable {
   public abstract <R,A> R accept(Pattern.Visitor<R,A> v, A arg);
   public interface Visitor <R,A> {
-    public R visit(org.syntax.stella.Absyn.PatternCastAs p, A arg);
-    public R visit(org.syntax.stella.Absyn.PatternAsc p, A arg);
-    public R visit(org.syntax.stella.Absyn.PatternVariant p, A arg);
-    public R visit(org.syntax.stella.Absyn.PatternInl p, A arg);
-    public R visit(org.syntax.stella.Absyn.PatternInr p, A arg);
-    public R visit(org.syntax.stella.Absyn.PatternTuple p, A arg);
-    public R visit(org.syntax.stella.Absyn.PatternRecord p, A arg);
-    public R visit(org.syntax.stella.Absyn.PatternList p, A arg);
-    public R visit(org.syntax.stella.Absyn.PatternCons p, A arg);
-    public R visit(org.syntax.stella.Absyn.PatternFalse p, A arg);
-    public R visit(org.syntax.stella.Absyn.PatternTrue p, A arg);
-    public R visit(org.syntax.stella.Absyn.PatternUnit p, A arg);
-    public R visit(org.syntax.stella.Absyn.PatternInt p, A arg);
-    public R visit(org.syntax.stella.Absyn.PatternSucc p, A arg);
-    public R visit(org.syntax.stella.Absyn.PatternVar p, A arg);
+    public R visit(PatternCastAs p, A arg);
+    public R visit(PatternAsc p, A arg);
+    public R visit(PatternVariant p, A arg);
+    public R visit(PatternInl p, A arg);
+    public R visit(PatternInr p, A arg);
+    public R visit(PatternTuple p, A arg);
+    public R visit(PatternRecord p, A arg);
+    public R visit(PatternList p, A arg);
+    public R visit(PatternCons p, A arg);
+    public R visit(PatternFalse p, A arg);
+    public R visit(PatternTrue p, A arg);
+    public R visit(PatternUnit p, A arg);
+    public R visit(PatternInt p, A arg);
+    public R visit(PatternSucc p, A arg);
+    public R visit(PatternVar p, A arg);
 
   }
 

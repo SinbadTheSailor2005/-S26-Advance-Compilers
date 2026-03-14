@@ -6,11 +6,11 @@ public class ConstTrue  extends Expr {
   public int line_num, col_num, offset;
   public ConstTrue() { }
 
-  public <R,A> R accept(org.syntax.stella.Absyn.Expr.Visitor<R,A> v, A arg) { return v.visit(this, arg); }
+  public <R,A> R accept(Expr.Visitor<R,A> v, A arg) { return v.visit(this, arg); }
 
-  public boolean equals(java.lang.Object o) {
+  public boolean equals(Object o) {
     if (this == o) return true;
-    if (o instanceof org.syntax.stella.Absyn.ConstTrue) {
+    if (o instanceof ConstTrue) {
       return true;
     }
     return false;

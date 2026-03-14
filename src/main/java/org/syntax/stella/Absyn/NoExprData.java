@@ -6,11 +6,11 @@ public class NoExprData  extends ExprData {
   public int line_num, col_num, offset;
   public NoExprData() { }
 
-  public <R,A> R accept(org.syntax.stella.Absyn.ExprData.Visitor<R,A> v, A arg) { return v.visit(this, arg); }
+  public <R,A> R accept(ExprData.Visitor<R,A> v, A arg) { return v.visit(this, arg); }
 
-  public boolean equals(java.lang.Object o) {
+  public boolean equals(Object o) {
     if (this == o) return true;
-    if (o instanceof org.syntax.stella.Absyn.NoExprData) {
+    if (o instanceof NoExprData) {
       return true;
     }
     return false;

@@ -2,5 +2,7 @@
 
 package org.syntax.stella.Absyn;
 
-public class ListLocalDecl extends java.util.LinkedList<LocalDecl> {
+import java.util.LinkedList;
+
+public class ListLocalDecl extends LinkedList<LocalDecl> {
 }

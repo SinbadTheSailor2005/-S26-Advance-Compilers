@@ -7,6 +7,8 @@ import java.io.*;
 import org.antlr.v4.runtime.*;
 import org.antlr.v4.runtime.atn.*;
 import org.antlr.v4.runtime.dfa.*;
+import org.syntax.stella.Absyn.Program;
+
 import java.util.*;
 
 class TestError extends RuntimeException
@@ -66,7 +68,7 @@ public class Test
             p.addErrorListener(new BNFCErrorListener());
   }
 
-  public org.syntax.stella.Absyn.Program parse() throws Exception
+  public Program parse() throws Exception
   {
     /* The default parser is the first-defined entry point. */
     /* Other options are: */
@@ -80,7 +82,7 @@ public class Test
        variantFieldType, listVariantFieldType, recordFieldType,
        listRecordFieldType, typing */
     stellaParser.Start_ProgramContext pc = p.start_Program();
-    org.syntax.stella.Absyn.Program ast = pc.result;
+    Program ast = pc.result;
     System.out.println();
     System.out.println("Parse Successful!");
     System.out.println();

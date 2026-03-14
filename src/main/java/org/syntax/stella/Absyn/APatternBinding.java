@@ -8,12 +8,12 @@ public class APatternBinding  extends PatternBinding {
   public int line_num, col_num, offset;
   public APatternBinding(Pattern p1, Expr p2) { pattern_ = p1; expr_ = p2; }
 
-  public <R,A> R accept(org.syntax.stella.Absyn.PatternBinding.Visitor<R,A> v, A arg) { return v.visit(this, arg); }
+  public <R,A> R accept(PatternBinding.Visitor<R,A> v, A arg) { return v.visit(this, arg); }
 
-  public boolean equals(java.lang.Object o) {
+  public boolean equals(Object o) {
     if (this == o) return true;
-    if (o instanceof org.syntax.stella.Absyn.APatternBinding) {
-      org.syntax.stella.Absyn.APatternBinding x = (org.syntax.stella.Absyn.APatternBinding)o;
+    if (o instanceof APatternBinding) {
+      APatternBinding x = (APatternBinding)o;
       return this.pattern_.equals(x.pattern_) && this.expr_.equals(x.expr_);
     }
     return false;

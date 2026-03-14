@@ -14,12 +14,12 @@ public class DeclFunGeneric  extends Decl {
   public int line_num, col_num, offset;
   public DeclFunGeneric(ListAnnotation p1, String p2, ListStellaIdent p3, ListParamDecl p4, ReturnType p5, ThrowType p6, ListDecl p7, Expr p8) { listannotation_ = p1; stellaident_ = p2; liststellaident_ = p3; listparamdecl_ = p4; returntype_ = p5; throwtype_ = p6; listdecl_ = p7; expr_ = p8; }
 
-  public <R,A> R accept(org.syntax.stella.Absyn.Decl.Visitor<R,A> v, A arg) { return v.visit(this, arg); }
+  public <R,A> R accept(Decl.Visitor<R,A> v, A arg) { return v.visit(this, arg); }
 
-  public boolean equals(java.lang.Object o) {
+  public boolean equals(Object o) {
     if (this == o) return true;
-    if (o instanceof org.syntax.stella.Absyn.DeclFunGeneric) {
-      org.syntax.stella.Absyn.DeclFunGeneric x = (org.syntax.stella.Absyn.DeclFunGeneric)o;
+    if (o instanceof DeclFunGeneric) {
+      DeclFunGeneric x = (DeclFunGeneric)o;
       return this.listannotation_.equals(x.listannotation_) && this.stellaident_.equals(x.stellaident_) && this.liststellaident_.equals(x.liststellaident_) && this.listparamdecl_.equals(x.listparamdecl_) && this.returntype_.equals(x.returntype_) && this.throwtype_.equals(x.throwtype_) && this.listdecl_.equals(x.listdecl_) && this.expr_.equals(x.expr_);
     }
     return false;

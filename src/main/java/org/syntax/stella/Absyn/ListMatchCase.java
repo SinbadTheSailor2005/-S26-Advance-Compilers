@@ -2,5 +2,7 @@
 
 package org.syntax.stella.Absyn;
 
-public class ListMatchCase extends java.util.LinkedList<MatchCase> {
+import java.util.LinkedList;
+
+public class ListMatchCase extends LinkedList<MatchCase> {
 }

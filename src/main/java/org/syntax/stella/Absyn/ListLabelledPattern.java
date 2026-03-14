@@ -2,5 +2,7 @@
 
 package org.syntax.stella.Absyn;
 
-public class ListLabelledPattern extends java.util.LinkedList<LabelledPattern> {
+import java.util.LinkedList;
+
+public class ListLabelledPattern extends LinkedList<LabelledPattern> {
 }

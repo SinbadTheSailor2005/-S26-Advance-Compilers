@@ -2,5 +2,7 @@
 
 package org.syntax.stella.Absyn;
 
-public class ListExtension extends java.util.LinkedList<Extension> {
+import java.util.LinkedList;
+
+public class ListExtension extends LinkedList<Extension> {
 }

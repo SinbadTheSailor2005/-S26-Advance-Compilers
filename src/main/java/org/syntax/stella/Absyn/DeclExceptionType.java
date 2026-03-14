@@ -7,12 +7,12 @@ public class DeclExceptionType  extends Decl {
   public int line_num, col_num, offset;
   public DeclExceptionType(Type p1) { type_ = p1; }
 
-  public <R,A> R accept(org.syntax.stella.Absyn.Decl.Visitor<R,A> v, A arg) { return v.visit(this, arg); }
+  public <R,A> R accept(Decl.Visitor<R,A> v, A arg) { return v.visit(this, arg); }
 
-  public boolean equals(java.lang.Object o) {
+  public boolean equals(Object o) {
     if (this == o) return true;
-    if (o instanceof org.syntax.stella.Absyn.DeclExceptionType) {
-      org.syntax.stella.Absyn.DeclExceptionType x = (org.syntax.stella.Absyn.DeclExceptionType)o;
+    if (o instanceof DeclExceptionType) {
+      DeclExceptionType x = (DeclExceptionType)o;
       return this.type_.equals(x.type_);
     }
     return false;

@@ -2,14 +2,16 @@
 
 package org.syntax.stella.Absyn;
 
-public abstract class Decl implements java.io.Serializable {
+import java.io.Serializable;
+
+public abstract class Decl implements Serializable {
   public abstract <R,A> R accept(Decl.Visitor<R,A> v, A arg);
   public interface Visitor <R,A> {
-    public R visit(org.syntax.stella.Absyn.DeclFun p, A arg);
-    public R visit(org.syntax.stella.Absyn.DeclFunGeneric p, A arg);
-    public R visit(org.syntax.stella.Absyn.DeclTypeAlias p, A arg);
-    public R visit(org.syntax.stella.Absyn.DeclExceptionType p, A arg);
-    public R visit(org.syntax.stella.Absyn.DeclExceptionVariant p, A arg);
+    public R visit(DeclFun p, A arg);
+    public R visit(DeclFunGeneric p, A arg);
+    public R visit(DeclTypeAlias p, A arg);
+    public R visit(DeclExceptionType p, A arg);
+    public R visit(DeclExceptionVariant p, A arg);
 
   }
 

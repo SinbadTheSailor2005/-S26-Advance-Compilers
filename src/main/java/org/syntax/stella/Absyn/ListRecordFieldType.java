@@ -2,5 +2,7 @@
 
 package org.syntax.stella.Absyn;
 
-public class ListRecordFieldType extends java.util.LinkedList<RecordFieldType> {
+import java.util.LinkedList;
+
+public class ListRecordFieldType extends LinkedList<RecordFieldType> {
 }

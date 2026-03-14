@@ -7,12 +7,12 @@ public class Throw  extends Expr {
   public int line_num, col_num, offset;
   public Throw(Expr p1) { expr_ = p1; }
 
-  public <R,A> R accept(org.syntax.stella.Absyn.Expr.Visitor<R,A> v, A arg) { return v.visit(this, arg); }
+  public <R,A> R accept(Expr.Visitor<R,A> v, A arg) { return v.visit(this, arg); }
 
-  public boolean equals(java.lang.Object o) {
+  public boolean equals(Object o) {
     if (this == o) return true;
-    if (o instanceof org.syntax.stella.Absyn.Throw) {
-      org.syntax.stella.Absyn.Throw x = (org.syntax.stella.Absyn.Throw)o;
+    if (o instanceof Throw) {
+      Throw x = (Throw)o;
       return this.expr_.equals(x.expr_);
     }
     return false;

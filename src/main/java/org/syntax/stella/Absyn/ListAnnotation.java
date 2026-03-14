@@ -2,5 +2,7 @@
 
 package org.syntax.stella.Absyn;
 
-public class ListAnnotation extends java.util.LinkedList<Annotation> {
+import java.util.LinkedList;
+
+public class ListAnnotation extends LinkedList<Annotation> {
 }

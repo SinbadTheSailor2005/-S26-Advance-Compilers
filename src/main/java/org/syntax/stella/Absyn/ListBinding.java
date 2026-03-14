@@ -2,5 +2,7 @@
 
 package org.syntax.stella.Absyn;
 
-public class ListBinding extends java.util.LinkedList<Binding> {
+import java.util.LinkedList;
+
+public class ListBinding extends LinkedList<Binding> {
 }

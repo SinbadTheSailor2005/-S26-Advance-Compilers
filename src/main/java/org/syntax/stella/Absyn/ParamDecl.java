@@ -2,10 +2,12 @@
 
 package org.syntax.stella.Absyn;
 
-public abstract class ParamDecl implements java.io.Serializable {
+import java.io.Serializable;
+
+public abstract class ParamDecl implements Serializable {
   public abstract <R,A> R accept(ParamDecl.Visitor<R,A> v, A arg);
   public interface Visitor <R,A> {
-    public R visit(org.syntax.stella.Absyn.AParamDecl p, A arg);
+    public R visit(AParamDecl p, A arg);
 
   }
 

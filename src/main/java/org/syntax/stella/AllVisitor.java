@@ -2,29 +2,52 @@
 
 package org.syntax.stella;
 
+import org.syntax.stella.Absyn.Annotation;
+import org.syntax.stella.Absyn.Binding;
+import org.syntax.stella.Absyn.Decl;
+import org.syntax.stella.Absyn.Expr;
+import org.syntax.stella.Absyn.ExprData;
+import org.syntax.stella.Absyn.Extension;
+import org.syntax.stella.Absyn.LabelledPattern;
+import org.syntax.stella.Absyn.LanguageDecl;
+import org.syntax.stella.Absyn.LocalDecl;
+import org.syntax.stella.Absyn.MatchCase;
+import org.syntax.stella.Absyn.OptionalTyping;
+import org.syntax.stella.Absyn.ParamDecl;
+import org.syntax.stella.Absyn.Pattern;
+import org.syntax.stella.Absyn.PatternBinding;
+import org.syntax.stella.Absyn.PatternData;
+import org.syntax.stella.Absyn.Program;
+import org.syntax.stella.Absyn.RecordFieldType;
+import org.syntax.stella.Absyn.ReturnType;
+import org.syntax.stella.Absyn.ThrowType;
+import org.syntax.stella.Absyn.Type;
+import org.syntax.stella.Absyn.Typing;
+import org.syntax.stella.Absyn.VariantFieldType;
+
 /** All Visitor */
 
 public interface AllVisitor<R,A> extends
-  org.syntax.stella.Absyn.Program.Visitor<R,A>,
-  org.syntax.stella.Absyn.LanguageDecl.Visitor<R,A>,
-  org.syntax.stella.Absyn.Extension.Visitor<R,A>,
-  org.syntax.stella.Absyn.Decl.Visitor<R,A>,
-  org.syntax.stella.Absyn.LocalDecl.Visitor<R,A>,
-  org.syntax.stella.Absyn.Annotation.Visitor<R,A>,
-  org.syntax.stella.Absyn.ParamDecl.Visitor<R,A>,
-  org.syntax.stella.Absyn.ReturnType.Visitor<R,A>,
-  org.syntax.stella.Absyn.ThrowType.Visitor<R,A>,
-  org.syntax.stella.Absyn.Type.Visitor<R,A>,
-  org.syntax.stella.Absyn.MatchCase.Visitor<R,A>,
-  org.syntax.stella.Absyn.OptionalTyping.Visitor<R,A>,
-  org.syntax.stella.Absyn.PatternData.Visitor<R,A>,
-  org.syntax.stella.Absyn.ExprData.Visitor<R,A>,
-  org.syntax.stella.Absyn.Pattern.Visitor<R,A>,
-  org.syntax.stella.Absyn.LabelledPattern.Visitor<R,A>,
-  org.syntax.stella.Absyn.Binding.Visitor<R,A>,
-  org.syntax.stella.Absyn.Expr.Visitor<R,A>,
-  org.syntax.stella.Absyn.PatternBinding.Visitor<R,A>,
-  org.syntax.stella.Absyn.VariantFieldType.Visitor<R,A>,
-  org.syntax.stella.Absyn.RecordFieldType.Visitor<R,A>,
-  org.syntax.stella.Absyn.Typing.Visitor<R,A>
+  Program.Visitor<R,A>,
+  LanguageDecl.Visitor<R,A>,
+  Extension.Visitor<R,A>,
+  Decl.Visitor<R,A>,
+  LocalDecl.Visitor<R,A>,
+  Annotation.Visitor<R,A>,
+  ParamDecl.Visitor<R,A>,
+  ReturnType.Visitor<R,A>,
+  ThrowType.Visitor<R,A>,
+  Type.Visitor<R,A>,
+  MatchCase.Visitor<R,A>,
+  OptionalTyping.Visitor<R,A>,
+  PatternData.Visitor<R,A>,
+  ExprData.Visitor<R,A>,
+  Pattern.Visitor<R,A>,
+  LabelledPattern.Visitor<R,A>,
+  Binding.Visitor<R,A>,
+  Expr.Visitor<R,A>,
+  PatternBinding.Visitor<R,A>,
+  VariantFieldType.Visitor<R,A>,
+  RecordFieldType.Visitor<R,A>,
+  Typing.Visitor<R,A>
 {}

@@ -7,12 +7,12 @@ public class Inr  extends Expr {
   public int line_num, col_num, offset;
   public Inr(Expr p1) { expr_ = p1; }
 
-  public <R,A> R accept(org.syntax.stella.Absyn.Expr.Visitor<R,A> v, A arg) { return v.visit(this, arg); }
+  public <R,A> R accept(Expr.Visitor<R,A> v, A arg) { return v.visit(this, arg); }
 
-  public boolean equals(java.lang.Object o) {
+  public boolean equals(Object o) {
     if (this == o) return true;
-    if (o instanceof org.syntax.stella.Absyn.Inr) {
-      org.syntax.stella.Absyn.Inr x = (org.syntax.stella.Absyn.Inr)o;
+    if (o instanceof Inr) {
+      Inr x = (Inr)o;
       return this.expr_.equals(x.expr_);
     }
     return false;

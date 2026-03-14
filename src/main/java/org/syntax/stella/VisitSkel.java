@@ -2,6 +2,145 @@
 
 package org.syntax.stella;
 
+import org.syntax.stella.Absyn.ABinding;
+import org.syntax.stella.Absyn.ALabelledPattern;
+import org.syntax.stella.Absyn.ALocalDecl;
+import org.syntax.stella.Absyn.AMatchCase;
+import org.syntax.stella.Absyn.AParamDecl;
+import org.syntax.stella.Absyn.APatternBinding;
+import org.syntax.stella.Absyn.AProgram;
+import org.syntax.stella.Absyn.ARecordFieldType;
+import org.syntax.stella.Absyn.ATyping;
+import org.syntax.stella.Absyn.AVariantFieldType;
+import org.syntax.stella.Absyn.Abstraction;
+import org.syntax.stella.Absyn.Add;
+import org.syntax.stella.Absyn.AnExtension;
+import org.syntax.stella.Absyn.Annotation;
+import org.syntax.stella.Absyn.Application;
+import org.syntax.stella.Absyn.Assign;
+import org.syntax.stella.Absyn.Binding;
+import org.syntax.stella.Absyn.ConsList;
+import org.syntax.stella.Absyn.ConstFalse;
+import org.syntax.stella.Absyn.ConstInt;
+import org.syntax.stella.Absyn.ConstMemory;
+import org.syntax.stella.Absyn.ConstTrue;
+import org.syntax.stella.Absyn.ConstUnit;
+import org.syntax.stella.Absyn.Decl;
+import org.syntax.stella.Absyn.DeclExceptionType;
+import org.syntax.stella.Absyn.DeclExceptionVariant;
+import org.syntax.stella.Absyn.DeclFun;
+import org.syntax.stella.Absyn.DeclFunGeneric;
+import org.syntax.stella.Absyn.DeclTypeAlias;
+import org.syntax.stella.Absyn.Deref;
+import org.syntax.stella.Absyn.Divide;
+import org.syntax.stella.Absyn.DotRecord;
+import org.syntax.stella.Absyn.DotTuple;
+import org.syntax.stella.Absyn.Equal;
+import org.syntax.stella.Absyn.Expr;
+import org.syntax.stella.Absyn.ExprData;
+import org.syntax.stella.Absyn.Extension;
+import org.syntax.stella.Absyn.Fix;
+import org.syntax.stella.Absyn.Fold;
+import org.syntax.stella.Absyn.GreaterThan;
+import org.syntax.stella.Absyn.GreaterThanOrEqual;
+import org.syntax.stella.Absyn.Head;
+import org.syntax.stella.Absyn.If;
+import org.syntax.stella.Absyn.Inl;
+import org.syntax.stella.Absyn.InlineAnnotation;
+import org.syntax.stella.Absyn.Inr;
+import org.syntax.stella.Absyn.IsEmpty;
+import org.syntax.stella.Absyn.IsZero;
+import org.syntax.stella.Absyn.LabelledPattern;
+import org.syntax.stella.Absyn.LanguageCore;
+import org.syntax.stella.Absyn.LanguageDecl;
+import org.syntax.stella.Absyn.LessThan;
+import org.syntax.stella.Absyn.LessThanOrEqual;
+import org.syntax.stella.Absyn.Let;
+import org.syntax.stella.Absyn.LetRec;
+import org.syntax.stella.Absyn.List;
+import org.syntax.stella.Absyn.LocalDecl;
+import org.syntax.stella.Absyn.LogicAnd;
+import org.syntax.stella.Absyn.LogicNot;
+import org.syntax.stella.Absyn.LogicOr;
+import org.syntax.stella.Absyn.Match;
+import org.syntax.stella.Absyn.MatchCase;
+import org.syntax.stella.Absyn.Multiply;
+import org.syntax.stella.Absyn.NatRec;
+import org.syntax.stella.Absyn.NoExprData;
+import org.syntax.stella.Absyn.NoPatternData;
+import org.syntax.stella.Absyn.NoReturnType;
+import org.syntax.stella.Absyn.NoThrowType;
+import org.syntax.stella.Absyn.NoTyping;
+import org.syntax.stella.Absyn.NotEqual;
+import org.syntax.stella.Absyn.OptionalTyping;
+import org.syntax.stella.Absyn.Panic;
+import org.syntax.stella.Absyn.ParamDecl;
+import org.syntax.stella.Absyn.Pattern;
+import org.syntax.stella.Absyn.PatternAsc;
+import org.syntax.stella.Absyn.PatternBinding;
+import org.syntax.stella.Absyn.PatternCastAs;
+import org.syntax.stella.Absyn.PatternCons;
+import org.syntax.stella.Absyn.PatternData;
+import org.syntax.stella.Absyn.PatternFalse;
+import org.syntax.stella.Absyn.PatternInl;
+import org.syntax.stella.Absyn.PatternInr;
+import org.syntax.stella.Absyn.PatternInt;
+import org.syntax.stella.Absyn.PatternList;
+import org.syntax.stella.Absyn.PatternRecord;
+import org.syntax.stella.Absyn.PatternSucc;
+import org.syntax.stella.Absyn.PatternTrue;
+import org.syntax.stella.Absyn.PatternTuple;
+import org.syntax.stella.Absyn.PatternUnit;
+import org.syntax.stella.Absyn.PatternVar;
+import org.syntax.stella.Absyn.PatternVariant;
+import org.syntax.stella.Absyn.Pred;
+import org.syntax.stella.Absyn.Program;
+import org.syntax.stella.Absyn.Record;
+import org.syntax.stella.Absyn.RecordFieldType;
+import org.syntax.stella.Absyn.Ref;
+import org.syntax.stella.Absyn.ReturnType;
+import org.syntax.stella.Absyn.Sequence;
+import org.syntax.stella.Absyn.SomeExprData;
+import org.syntax.stella.Absyn.SomePatternData;
+import org.syntax.stella.Absyn.SomeReturnType;
+import org.syntax.stella.Absyn.SomeThrowType;
+import org.syntax.stella.Absyn.SomeTyping;
+import org.syntax.stella.Absyn.Subtract;
+import org.syntax.stella.Absyn.Succ;
+import org.syntax.stella.Absyn.Tail;
+import org.syntax.stella.Absyn.Throw;
+import org.syntax.stella.Absyn.ThrowType;
+import org.syntax.stella.Absyn.TryCastAs;
+import org.syntax.stella.Absyn.TryCatch;
+import org.syntax.stella.Absyn.TryWith;
+import org.syntax.stella.Absyn.Tuple;
+import org.syntax.stella.Absyn.Type;
+import org.syntax.stella.Absyn.TypeAbstraction;
+import org.syntax.stella.Absyn.TypeApplication;
+import org.syntax.stella.Absyn.TypeAsc;
+import org.syntax.stella.Absyn.TypeAuto;
+import org.syntax.stella.Absyn.TypeBool;
+import org.syntax.stella.Absyn.TypeBottom;
+import org.syntax.stella.Absyn.TypeCast;
+import org.syntax.stella.Absyn.TypeForAll;
+import org.syntax.stella.Absyn.TypeFun;
+import org.syntax.stella.Absyn.TypeList;
+import org.syntax.stella.Absyn.TypeNat;
+import org.syntax.stella.Absyn.TypeRec;
+import org.syntax.stella.Absyn.TypeRecord;
+import org.syntax.stella.Absyn.TypeRef;
+import org.syntax.stella.Absyn.TypeSum;
+import org.syntax.stella.Absyn.TypeTop;
+import org.syntax.stella.Absyn.TypeTuple;
+import org.syntax.stella.Absyn.TypeUnit;
+import org.syntax.stella.Absyn.TypeVar;
+import org.syntax.stella.Absyn.TypeVariant;
+import org.syntax.stella.Absyn.Typing;
+import org.syntax.stella.Absyn.Unfold;
+import org.syntax.stella.Absyn.Var;
+import org.syntax.stella.Absyn.Variant;
+import org.syntax.stella.Absyn.VariantFieldType;
+
 /*** Visitor Design Pattern Skeleton. ***/
 
 /* This implements the common visitor design pattern.
@@ -12,30 +151,30 @@ package org.syntax.stella;
 
 public class VisitSkel
 {
-  public class ProgramVisitor<R,A> implements org.syntax.stella.Absyn.Program.Visitor<R,A>
+  public class ProgramVisitor<R,A> implements Program.Visitor<R,A>
   {
-    public R visit(org.syntax.stella.Absyn.AProgram p, A arg)
+    public R visit(AProgram p, A arg)
     { /* Code for AProgram goes here */
       p.languagedecl_.accept(new LanguageDeclVisitor<R,A>(), arg);
-      for (org.syntax.stella.Absyn.Extension x: p.listextension_) {
+      for (Extension x: p.listextension_) {
         x.accept(new ExtensionVisitor<R,A>(), arg);
       }
-      for (org.syntax.stella.Absyn.Decl x: p.listdecl_) {
+      for (Decl x: p.listdecl_) {
         x.accept(new DeclVisitor<R,A>(), arg);
       }
       return null;
     }
   }
-  public class LanguageDeclVisitor<R,A> implements org.syntax.stella.Absyn.LanguageDecl.Visitor<R,A>
+  public class LanguageDeclVisitor<R,A> implements LanguageDecl.Visitor<R,A>
   {
-    public R visit(org.syntax.stella.Absyn.LanguageCore p, A arg)
+    public R visit(LanguageCore p, A arg)
     { /* Code for LanguageCore goes here */
       return null;
     }
   }
-  public class ExtensionVisitor<R,A> implements org.syntax.stella.Absyn.Extension.Visitor<R,A>
+  public class ExtensionVisitor<R,A> implements Extension.Visitor<R,A>
   {
-    public R visit(org.syntax.stella.Absyn.AnExtension p, A arg)
+    public R visit(AnExtension p, A arg)
     { /* Code for AnExtension goes here */
       for (String x: p.listextensionname_) {
         //x;
@@ -43,128 +182,128 @@ public class VisitSkel
       return null;
     }
   }
-  public class DeclVisitor<R,A> implements org.syntax.stella.Absyn.Decl.Visitor<R,A>
+  public class DeclVisitor<R,A> implements Decl.Visitor<R,A>
   {
-    public R visit(org.syntax.stella.Absyn.DeclFun p, A arg)
+    public R visit(DeclFun p, A arg)
     { /* Code for DeclFun goes here */
-      for (org.syntax.stella.Absyn.Annotation x: p.listannotation_) {
+      for (Annotation x: p.listannotation_) {
         x.accept(new AnnotationVisitor<R,A>(), arg);
       }
       //p.stellaident_;
-      for (org.syntax.stella.Absyn.ParamDecl x: p.listparamdecl_) {
+      for (ParamDecl x: p.listparamdecl_) {
         x.accept(new ParamDeclVisitor<R,A>(), arg);
       }
       p.returntype_.accept(new ReturnTypeVisitor<R,A>(), arg);
       p.throwtype_.accept(new ThrowTypeVisitor<R,A>(), arg);
-      for (org.syntax.stella.Absyn.Decl x: p.listdecl_) {
+      for (Decl x: p.listdecl_) {
         x.accept(new DeclVisitor<R,A>(), arg);
       }
       p.expr_.accept(new ExprVisitor<R,A>(), arg);
       return null;
     }
-    public R visit(org.syntax.stella.Absyn.DeclFunGeneric p, A arg)
+    public R visit(DeclFunGeneric p, A arg)
     { /* Code for DeclFunGeneric goes here */
-      for (org.syntax.stella.Absyn.Annotation x: p.listannotation_) {
+      for (Annotation x: p.listannotation_) {
         x.accept(new AnnotationVisitor<R,A>(), arg);
       }
       //p.stellaident_;
       for (String x: p.liststellaident_) {
         //x;
       }
-      for (org.syntax.stella.Absyn.ParamDecl x: p.listparamdecl_) {
+      for (ParamDecl x: p.listparamdecl_) {
         x.accept(new ParamDeclVisitor<R,A>(), arg);
       }
       p.returntype_.accept(new ReturnTypeVisitor<R,A>(), arg);
       p.throwtype_.accept(new ThrowTypeVisitor<R,A>(), arg);
-      for (org.syntax.stella.Absyn.Decl x: p.listdecl_) {
+      for (Decl x: p.listdecl_) {
         x.accept(new DeclVisitor<R,A>(), arg);
       }
       p.expr_.accept(new ExprVisitor<R,A>(), arg);
       return null;
     }
-    public R visit(org.syntax.stella.Absyn.DeclTypeAlias p, A arg)
+    public R visit(DeclTypeAlias p, A arg)
     { /* Code for DeclTypeAlias goes here */
       //p.stellaident_;
       p.type_.accept(new TypeVisitor<R,A>(), arg);
       return null;
     }
-    public R visit(org.syntax.stella.Absyn.DeclExceptionType p, A arg)
+    public R visit(DeclExceptionType p, A arg)
     { /* Code for DeclExceptionType goes here */
       p.type_.accept(new TypeVisitor<R,A>(), arg);
       return null;
     }
-    public R visit(org.syntax.stella.Absyn.DeclExceptionVariant p, A arg)
+    public R visit(DeclExceptionVariant p, A arg)
     { /* Code for DeclExceptionVariant goes here */
       //p.stellaident_;
       p.type_.accept(new TypeVisitor<R,A>(), arg);
       return null;
     }
   }
-  public class LocalDeclVisitor<R,A> implements org.syntax.stella.Absyn.LocalDecl.Visitor<R,A>
+  public class LocalDeclVisitor<R,A> implements LocalDecl.Visitor<R,A>
   {
-    public R visit(org.syntax.stella.Absyn.ALocalDecl p, A arg)
+    public R visit(ALocalDecl p, A arg)
     { /* Code for ALocalDecl goes here */
       p.decl_.accept(new DeclVisitor<R,A>(), arg);
       return null;
     }
   }
-  public class AnnotationVisitor<R,A> implements org.syntax.stella.Absyn.Annotation.Visitor<R,A>
+  public class AnnotationVisitor<R,A> implements Annotation.Visitor<R,A>
   {
-    public R visit(org.syntax.stella.Absyn.InlineAnnotation p, A arg)
+    public R visit(InlineAnnotation p, A arg)
     { /* Code for InlineAnnotation goes here */
       return null;
     }
   }
-  public class ParamDeclVisitor<R,A> implements org.syntax.stella.Absyn.ParamDecl.Visitor<R,A>
+  public class ParamDeclVisitor<R,A> implements ParamDecl.Visitor<R,A>
   {
-    public R visit(org.syntax.stella.Absyn.AParamDecl p, A arg)
+    public R visit(AParamDecl p, A arg)
     { /* Code for AParamDecl goes here */
       //p.stellaident_;
       p.type_.accept(new TypeVisitor<R,A>(), arg);
       return null;
     }
   }
-  public class ReturnTypeVisitor<R,A> implements org.syntax.stella.Absyn.ReturnType.Visitor<R,A>
+  public class ReturnTypeVisitor<R,A> implements ReturnType.Visitor<R,A>
   {
-    public R visit(org.syntax.stella.Absyn.NoReturnType p, A arg)
+    public R visit(NoReturnType p, A arg)
     { /* Code for NoReturnType goes here */
       return null;
     }
-    public R visit(org.syntax.stella.Absyn.SomeReturnType p, A arg)
+    public R visit(SomeReturnType p, A arg)
     { /* Code for SomeReturnType goes here */
       p.type_.accept(new TypeVisitor<R,A>(), arg);
       return null;
     }
   }
-  public class ThrowTypeVisitor<R,A> implements org.syntax.stella.Absyn.ThrowType.Visitor<R,A>
+  public class ThrowTypeVisitor<R,A> implements ThrowType.Visitor<R,A>
   {
-    public R visit(org.syntax.stella.Absyn.NoThrowType p, A arg)
+    public R visit(NoThrowType p, A arg)
     { /* Code for NoThrowType goes here */
       return null;
     }
-    public R visit(org.syntax.stella.Absyn.SomeThrowType p, A arg)
+    public R visit(SomeThrowType p, A arg)
     { /* Code for SomeThrowType goes here */
-      for (org.syntax.stella.Absyn.Type x: p.listtype_) {
+      for (Type x: p.listtype_) {
         x.accept(new TypeVisitor<R,A>(), arg);
       }
       return null;
     }
   }
-  public class TypeVisitor<R,A> implements org.syntax.stella.Absyn.Type.Visitor<R,A>
+  public class TypeVisitor<R,A> implements Type.Visitor<R,A>
   {
-    public R visit(org.syntax.stella.Absyn.TypeAuto p, A arg)
+    public R visit(TypeAuto p, A arg)
     { /* Code for TypeAuto goes here */
       return null;
     }
-    public R visit(org.syntax.stella.Absyn.TypeFun p, A arg)
+    public R visit(TypeFun p, A arg)
     { /* Code for TypeFun goes here */
-      for (org.syntax.stella.Absyn.Type x: p.listtype_) {
+      for (Type x: p.listtype_) {
         x.accept(new TypeVisitor<R,A>(), arg);
       }
       p.type_.accept(new TypeVisitor<R,A>(), arg);
       return null;
     }
-    public R visit(org.syntax.stella.Absyn.TypeForAll p, A arg)
+    public R visit(TypeForAll p, A arg)
     { /* Code for TypeForAll goes here */
       for (String x: p.liststellaident_) {
         //x;
@@ -172,248 +311,248 @@ public class VisitSkel
       p.type_.accept(new TypeVisitor<R,A>(), arg);
       return null;
     }
-    public R visit(org.syntax.stella.Absyn.TypeRec p, A arg)
+    public R visit(TypeRec p, A arg)
     { /* Code for TypeRec goes here */
       //p.stellaident_;
       p.type_.accept(new TypeVisitor<R,A>(), arg);
       return null;
     }
-    public R visit(org.syntax.stella.Absyn.TypeSum p, A arg)
+    public R visit(TypeSum p, A arg)
     { /* Code for TypeSum goes here */
       p.type_1.accept(new TypeVisitor<R,A>(), arg);
       p.type_2.accept(new TypeVisitor<R,A>(), arg);
       return null;
     }
-    public R visit(org.syntax.stella.Absyn.TypeTuple p, A arg)
+    public R visit(TypeTuple p, A arg)
     { /* Code for TypeTuple goes here */
-      for (org.syntax.stella.Absyn.Type x: p.listtype_) {
+      for (Type x: p.listtype_) {
         x.accept(new TypeVisitor<R,A>(), arg);
       }
       return null;
     }
-    public R visit(org.syntax.stella.Absyn.TypeRecord p, A arg)
+    public R visit(TypeRecord p, A arg)
     { /* Code for TypeRecord goes here */
-      for (org.syntax.stella.Absyn.RecordFieldType x: p.listrecordfieldtype_) {
+      for (RecordFieldType x: p.listrecordfieldtype_) {
         x.accept(new RecordFieldTypeVisitor<R,A>(), arg);
       }
       return null;
     }
-    public R visit(org.syntax.stella.Absyn.TypeVariant p, A arg)
+    public R visit(TypeVariant p, A arg)
     { /* Code for TypeVariant goes here */
-      for (org.syntax.stella.Absyn.VariantFieldType x: p.listvariantfieldtype_) {
+      for (VariantFieldType x: p.listvariantfieldtype_) {
         x.accept(new VariantFieldTypeVisitor<R,A>(), arg);
       }
       return null;
     }
-    public R visit(org.syntax.stella.Absyn.TypeList p, A arg)
+    public R visit(TypeList p, A arg)
     { /* Code for TypeList goes here */
       p.type_.accept(new TypeVisitor<R,A>(), arg);
       return null;
     }
-    public R visit(org.syntax.stella.Absyn.TypeBool p, A arg)
+    public R visit(TypeBool p, A arg)
     { /* Code for TypeBool goes here */
       return null;
     }
-    public R visit(org.syntax.stella.Absyn.TypeNat p, A arg)
+    public R visit(TypeNat p, A arg)
     { /* Code for TypeNat goes here */
       return null;
     }
-    public R visit(org.syntax.stella.Absyn.TypeUnit p, A arg)
+    public R visit(TypeUnit p, A arg)
     { /* Code for TypeUnit goes here */
       return null;
     }
-    public R visit(org.syntax.stella.Absyn.TypeTop p, A arg)
+    public R visit(TypeTop p, A arg)
     { /* Code for TypeTop goes here */
       return null;
     }
-    public R visit(org.syntax.stella.Absyn.TypeBottom p, A arg)
+    public R visit(TypeBottom p, A arg)
     { /* Code for TypeBottom goes here */
       return null;
     }
-    public R visit(org.syntax.stella.Absyn.TypeRef p, A arg)
+    public R visit(TypeRef p, A arg)
     { /* Code for TypeRef goes here */
       p.type_.accept(new TypeVisitor<R,A>(), arg);
       return null;
     }
-    public R visit(org.syntax.stella.Absyn.TypeVar p, A arg)
+    public R visit(TypeVar p, A arg)
     { /* Code for TypeVar goes here */
       //p.stellaident_;
       return null;
     }
   }
-  public class MatchCaseVisitor<R,A> implements org.syntax.stella.Absyn.MatchCase.Visitor<R,A>
+  public class MatchCaseVisitor<R,A> implements MatchCase.Visitor<R,A>
   {
-    public R visit(org.syntax.stella.Absyn.AMatchCase p, A arg)
+    public R visit(AMatchCase p, A arg)
     { /* Code for AMatchCase goes here */
       p.pattern_.accept(new PatternVisitor<R,A>(), arg);
       p.expr_.accept(new ExprVisitor<R,A>(), arg);
       return null;
     }
   }
-  public class OptionalTypingVisitor<R,A> implements org.syntax.stella.Absyn.OptionalTyping.Visitor<R,A>
+  public class OptionalTypingVisitor<R,A> implements OptionalTyping.Visitor<R,A>
   {
-    public R visit(org.syntax.stella.Absyn.NoTyping p, A arg)
+    public R visit(NoTyping p, A arg)
     { /* Code for NoTyping goes here */
       return null;
     }
-    public R visit(org.syntax.stella.Absyn.SomeTyping p, A arg)
+    public R visit(SomeTyping p, A arg)
     { /* Code for SomeTyping goes here */
       p.type_.accept(new TypeVisitor<R,A>(), arg);
       return null;
     }
   }
-  public class PatternDataVisitor<R,A> implements org.syntax.stella.Absyn.PatternData.Visitor<R,A>
+  public class PatternDataVisitor<R,A> implements PatternData.Visitor<R,A>
   {
-    public R visit(org.syntax.stella.Absyn.NoPatternData p, A arg)
+    public R visit(NoPatternData p, A arg)
     { /* Code for NoPatternData goes here */
       return null;
     }
-    public R visit(org.syntax.stella.Absyn.SomePatternData p, A arg)
+    public R visit(SomePatternData p, A arg)
     { /* Code for SomePatternData goes here */
       p.pattern_.accept(new PatternVisitor<R,A>(), arg);
       return null;
     }
   }
-  public class ExprDataVisitor<R,A> implements org.syntax.stella.Absyn.ExprData.Visitor<R,A>
+  public class ExprDataVisitor<R,A> implements ExprData.Visitor<R,A>
   {
-    public R visit(org.syntax.stella.Absyn.NoExprData p, A arg)
+    public R visit(NoExprData p, A arg)
     { /* Code for NoExprData goes here */
       return null;
     }
-    public R visit(org.syntax.stella.Absyn.SomeExprData p, A arg)
+    public R visit(SomeExprData p, A arg)
     { /* Code for SomeExprData goes here */
       p.expr_.accept(new ExprVisitor<R,A>(), arg);
       return null;
     }
   }
-  public class PatternVisitor<R,A> implements org.syntax.stella.Absyn.Pattern.Visitor<R,A>
+  public class PatternVisitor<R,A> implements Pattern.Visitor<R,A>
   {
-    public R visit(org.syntax.stella.Absyn.PatternCastAs p, A arg)
+    public R visit(PatternCastAs p, A arg)
     { /* Code for PatternCastAs goes here */
       p.pattern_.accept(new PatternVisitor<R,A>(), arg);
       p.type_.accept(new TypeVisitor<R,A>(), arg);
       return null;
     }
-    public R visit(org.syntax.stella.Absyn.PatternAsc p, A arg)
+    public R visit(PatternAsc p, A arg)
     { /* Code for PatternAsc goes here */
       p.pattern_.accept(new PatternVisitor<R,A>(), arg);
       p.type_.accept(new TypeVisitor<R,A>(), arg);
       return null;
     }
-    public R visit(org.syntax.stella.Absyn.PatternVariant p, A arg)
+    public R visit(PatternVariant p, A arg)
     { /* Code for PatternVariant goes here */
       //p.stellaident_;
       p.patterndata_.accept(new PatternDataVisitor<R,A>(), arg);
       return null;
     }
-    public R visit(org.syntax.stella.Absyn.PatternInl p, A arg)
+    public R visit(PatternInl p, A arg)
     { /* Code for PatternInl goes here */
       p.pattern_.accept(new PatternVisitor<R,A>(), arg);
       return null;
     }
-    public R visit(org.syntax.stella.Absyn.PatternInr p, A arg)
+    public R visit(PatternInr p, A arg)
     { /* Code for PatternInr goes here */
       p.pattern_.accept(new PatternVisitor<R,A>(), arg);
       return null;
     }
-    public R visit(org.syntax.stella.Absyn.PatternTuple p, A arg)
+    public R visit(PatternTuple p, A arg)
     { /* Code for PatternTuple goes here */
-      for (org.syntax.stella.Absyn.Pattern x: p.listpattern_) {
+      for (Pattern x: p.listpattern_) {
         x.accept(new PatternVisitor<R,A>(), arg);
       }
       return null;
     }
-    public R visit(org.syntax.stella.Absyn.PatternRecord p, A arg)
+    public R visit(PatternRecord p, A arg)
     { /* Code for PatternRecord goes here */
-      for (org.syntax.stella.Absyn.LabelledPattern x: p.listlabelledpattern_) {
+      for (LabelledPattern x: p.listlabelledpattern_) {
         x.accept(new LabelledPatternVisitor<R,A>(), arg);
       }
       return null;
     }
-    public R visit(org.syntax.stella.Absyn.PatternList p, A arg)
+    public R visit(PatternList p, A arg)
     { /* Code for PatternList goes here */
-      for (org.syntax.stella.Absyn.Pattern x: p.listpattern_) {
+      for (Pattern x: p.listpattern_) {
         x.accept(new PatternVisitor<R,A>(), arg);
       }
       return null;
     }
-    public R visit(org.syntax.stella.Absyn.PatternCons p, A arg)
+    public R visit(PatternCons p, A arg)
     { /* Code for PatternCons goes here */
       p.pattern_1.accept(new PatternVisitor<R,A>(), arg);
       p.pattern_2.accept(new PatternVisitor<R,A>(), arg);
       return null;
     }
-    public R visit(org.syntax.stella.Absyn.PatternFalse p, A arg)
+    public R visit(PatternFalse p, A arg)
     { /* Code for PatternFalse goes here */
       return null;
     }
-    public R visit(org.syntax.stella.Absyn.PatternTrue p, A arg)
+    public R visit(PatternTrue p, A arg)
     { /* Code for PatternTrue goes here */
       return null;
     }
-    public R visit(org.syntax.stella.Absyn.PatternUnit p, A arg)
+    public R visit(PatternUnit p, A arg)
     { /* Code for PatternUnit goes here */
       return null;
     }
-    public R visit(org.syntax.stella.Absyn.PatternInt p, A arg)
+    public R visit(PatternInt p, A arg)
     { /* Code for PatternInt goes here */
       //p.integer_;
       return null;
     }
-    public R visit(org.syntax.stella.Absyn.PatternSucc p, A arg)
+    public R visit(PatternSucc p, A arg)
     { /* Code for PatternSucc goes here */
       p.pattern_.accept(new PatternVisitor<R,A>(), arg);
       return null;
     }
-    public R visit(org.syntax.stella.Absyn.PatternVar p, A arg)
+    public R visit(PatternVar p, A arg)
     { /* Code for PatternVar goes here */
       //p.stellaident_;
       return null;
     }
   }
-  public class LabelledPatternVisitor<R,A> implements org.syntax.stella.Absyn.LabelledPattern.Visitor<R,A>
+  public class LabelledPatternVisitor<R,A> implements LabelledPattern.Visitor<R,A>
   {
-    public R visit(org.syntax.stella.Absyn.ALabelledPattern p, A arg)
+    public R visit(ALabelledPattern p, A arg)
     { /* Code for ALabelledPattern goes here */
       //p.stellaident_;
       p.pattern_.accept(new PatternVisitor<R,A>(), arg);
       return null;
     }
   }
-  public class BindingVisitor<R,A> implements org.syntax.stella.Absyn.Binding.Visitor<R,A>
+  public class BindingVisitor<R,A> implements Binding.Visitor<R,A>
   {
-    public R visit(org.syntax.stella.Absyn.ABinding p, A arg)
+    public R visit(ABinding p, A arg)
     { /* Code for ABinding goes here */
       //p.stellaident_;
       p.expr_.accept(new ExprVisitor<R,A>(), arg);
       return null;
     }
   }
-  public class ExprVisitor<R,A> implements org.syntax.stella.Absyn.Expr.Visitor<R,A>
+  public class ExprVisitor<R,A> implements Expr.Visitor<R,A>
   {
-    public R visit(org.syntax.stella.Absyn.Sequence p, A arg)
+    public R visit(Sequence p, A arg)
     { /* Code for Sequence goes here */
       p.expr_1.accept(new ExprVisitor<R,A>(), arg);
       p.expr_2.accept(new ExprVisitor<R,A>(), arg);
       return null;
     }
-    public R visit(org.syntax.stella.Absyn.Let p, A arg)
+    public R visit(Let p, A arg)
     { /* Code for Let goes here */
-      for (org.syntax.stella.Absyn.PatternBinding x: p.listpatternbinding_) {
+      for (PatternBinding x: p.listpatternbinding_) {
         x.accept(new PatternBindingVisitor<R,A>(), arg);
       }
       p.expr_.accept(new ExprVisitor<R,A>(), arg);
       return null;
     }
-    public R visit(org.syntax.stella.Absyn.LetRec p, A arg)
+    public R visit(LetRec p, A arg)
     { /* Code for LetRec goes here */
-      for (org.syntax.stella.Absyn.PatternBinding x: p.listpatternbinding_) {
+      for (PatternBinding x: p.listpatternbinding_) {
         x.accept(new PatternBindingVisitor<R,A>(), arg);
       }
       p.expr_.accept(new ExprVisitor<R,A>(), arg);
       return null;
     }
-    public R visit(org.syntax.stella.Absyn.TypeAbstraction p, A arg)
+    public R visit(TypeAbstraction p, A arg)
     { /* Code for TypeAbstraction goes here */
       for (String x: p.liststellaident_) {
         //x;
@@ -421,228 +560,228 @@ public class VisitSkel
       p.expr_.accept(new ExprVisitor<R,A>(), arg);
       return null;
     }
-    public R visit(org.syntax.stella.Absyn.Assign p, A arg)
+    public R visit(Assign p, A arg)
     { /* Code for Assign goes here */
       p.expr_1.accept(new ExprVisitor<R,A>(), arg);
       p.expr_2.accept(new ExprVisitor<R,A>(), arg);
       return null;
     }
-    public R visit(org.syntax.stella.Absyn.If p, A arg)
+    public R visit(If p, A arg)
     { /* Code for If goes here */
       p.expr_1.accept(new ExprVisitor<R,A>(), arg);
       p.expr_2.accept(new ExprVisitor<R,A>(), arg);
       p.expr_3.accept(new ExprVisitor<R,A>(), arg);
       return null;
     }
-    public R visit(org.syntax.stella.Absyn.LessThan p, A arg)
+    public R visit(LessThan p, A arg)
     { /* Code for LessThan goes here */
       p.expr_1.accept(new ExprVisitor<R,A>(), arg);
       p.expr_2.accept(new ExprVisitor<R,A>(), arg);
       return null;
     }
-    public R visit(org.syntax.stella.Absyn.LessThanOrEqual p, A arg)
+    public R visit(LessThanOrEqual p, A arg)
     { /* Code for LessThanOrEqual goes here */
       p.expr_1.accept(new ExprVisitor<R,A>(), arg);
       p.expr_2.accept(new ExprVisitor<R,A>(), arg);
       return null;
     }
-    public R visit(org.syntax.stella.Absyn.GreaterThan p, A arg)
+    public R visit(GreaterThan p, A arg)
     { /* Code for GreaterThan goes here */
       p.expr_1.accept(new ExprVisitor<R,A>(), arg);
       p.expr_2.accept(new ExprVisitor<R,A>(), arg);
       return null;
     }
-    public R visit(org.syntax.stella.Absyn.GreaterThanOrEqual p, A arg)
+    public R visit(GreaterThanOrEqual p, A arg)
     { /* Code for GreaterThanOrEqual goes here */
       p.expr_1.accept(new ExprVisitor<R,A>(), arg);
       p.expr_2.accept(new ExprVisitor<R,A>(), arg);
       return null;
     }
-    public R visit(org.syntax.stella.Absyn.Equal p, A arg)
+    public R visit(Equal p, A arg)
     { /* Code for Equal goes here */
       p.expr_1.accept(new ExprVisitor<R,A>(), arg);
       p.expr_2.accept(new ExprVisitor<R,A>(), arg);
       return null;
     }
-    public R visit(org.syntax.stella.Absyn.NotEqual p, A arg)
+    public R visit(NotEqual p, A arg)
     { /* Code for NotEqual goes here */
       p.expr_1.accept(new ExprVisitor<R,A>(), arg);
       p.expr_2.accept(new ExprVisitor<R,A>(), arg);
       return null;
     }
-    public R visit(org.syntax.stella.Absyn.TypeAsc p, A arg)
+    public R visit(TypeAsc p, A arg)
     { /* Code for TypeAsc goes here */
       p.expr_.accept(new ExprVisitor<R,A>(), arg);
       p.type_.accept(new TypeVisitor<R,A>(), arg);
       return null;
     }
-    public R visit(org.syntax.stella.Absyn.TypeCast p, A arg)
+    public R visit(TypeCast p, A arg)
     { /* Code for TypeCast goes here */
       p.expr_.accept(new ExprVisitor<R,A>(), arg);
       p.type_.accept(new TypeVisitor<R,A>(), arg);
       return null;
     }
-    public R visit(org.syntax.stella.Absyn.Abstraction p, A arg)
+    public R visit(Abstraction p, A arg)
     { /* Code for Abstraction goes here */
-      for (org.syntax.stella.Absyn.ParamDecl x: p.listparamdecl_) {
+      for (ParamDecl x: p.listparamdecl_) {
         x.accept(new ParamDeclVisitor<R,A>(), arg);
       }
       p.expr_.accept(new ExprVisitor<R,A>(), arg);
       return null;
     }
-    public R visit(org.syntax.stella.Absyn.Variant p, A arg)
+    public R visit(Variant p, A arg)
     { /* Code for Variant goes here */
       //p.stellaident_;
       p.exprdata_.accept(new ExprDataVisitor<R,A>(), arg);
       return null;
     }
-    public R visit(org.syntax.stella.Absyn.Match p, A arg)
+    public R visit(Match p, A arg)
     { /* Code for Match goes here */
       p.expr_.accept(new ExprVisitor<R,A>(), arg);
-      for (org.syntax.stella.Absyn.MatchCase x: p.listmatchcase_) {
+      for (MatchCase x: p.listmatchcase_) {
         x.accept(new MatchCaseVisitor<R,A>(), arg);
       }
       return null;
     }
-    public R visit(org.syntax.stella.Absyn.List p, A arg)
+    public R visit(List p, A arg)
     { /* Code for List goes here */
-      for (org.syntax.stella.Absyn.Expr x: p.listexpr_) {
+      for (Expr x: p.listexpr_) {
         x.accept(new ExprVisitor<R,A>(), arg);
       }
       return null;
     }
-    public R visit(org.syntax.stella.Absyn.Add p, A arg)
+    public R visit(Add p, A arg)
     { /* Code for Add goes here */
       p.expr_1.accept(new ExprVisitor<R,A>(), arg);
       p.expr_2.accept(new ExprVisitor<R,A>(), arg);
       return null;
     }
-    public R visit(org.syntax.stella.Absyn.Subtract p, A arg)
+    public R visit(Subtract p, A arg)
     { /* Code for Subtract goes here */
       p.expr_1.accept(new ExprVisitor<R,A>(), arg);
       p.expr_2.accept(new ExprVisitor<R,A>(), arg);
       return null;
     }
-    public R visit(org.syntax.stella.Absyn.LogicOr p, A arg)
+    public R visit(LogicOr p, A arg)
     { /* Code for LogicOr goes here */
       p.expr_1.accept(new ExprVisitor<R,A>(), arg);
       p.expr_2.accept(new ExprVisitor<R,A>(), arg);
       return null;
     }
-    public R visit(org.syntax.stella.Absyn.Multiply p, A arg)
+    public R visit(Multiply p, A arg)
     { /* Code for Multiply goes here */
       p.expr_1.accept(new ExprVisitor<R,A>(), arg);
       p.expr_2.accept(new ExprVisitor<R,A>(), arg);
       return null;
     }
-    public R visit(org.syntax.stella.Absyn.Divide p, A arg)
+    public R visit(Divide p, A arg)
     { /* Code for Divide goes here */
       p.expr_1.accept(new ExprVisitor<R,A>(), arg);
       p.expr_2.accept(new ExprVisitor<R,A>(), arg);
       return null;
     }
-    public R visit(org.syntax.stella.Absyn.LogicAnd p, A arg)
+    public R visit(LogicAnd p, A arg)
     { /* Code for LogicAnd goes here */
       p.expr_1.accept(new ExprVisitor<R,A>(), arg);
       p.expr_2.accept(new ExprVisitor<R,A>(), arg);
       return null;
     }
-    public R visit(org.syntax.stella.Absyn.Ref p, A arg)
+    public R visit(Ref p, A arg)
     { /* Code for Ref goes here */
       p.expr_.accept(new ExprVisitor<R,A>(), arg);
       return null;
     }
-    public R visit(org.syntax.stella.Absyn.Deref p, A arg)
+    public R visit(Deref p, A arg)
     { /* Code for Deref goes here */
       p.expr_.accept(new ExprVisitor<R,A>(), arg);
       return null;
     }
-    public R visit(org.syntax.stella.Absyn.Application p, A arg)
+    public R visit(Application p, A arg)
     { /* Code for Application goes here */
       p.expr_.accept(new ExprVisitor<R,A>(), arg);
-      for (org.syntax.stella.Absyn.Expr x: p.listexpr_) {
+      for (Expr x: p.listexpr_) {
         x.accept(new ExprVisitor<R,A>(), arg);
       }
       return null;
     }
-    public R visit(org.syntax.stella.Absyn.TypeApplication p, A arg)
+    public R visit(TypeApplication p, A arg)
     { /* Code for TypeApplication goes here */
       p.expr_.accept(new ExprVisitor<R,A>(), arg);
-      for (org.syntax.stella.Absyn.Type x: p.listtype_) {
+      for (Type x: p.listtype_) {
         x.accept(new TypeVisitor<R,A>(), arg);
       }
       return null;
     }
-    public R visit(org.syntax.stella.Absyn.DotRecord p, A arg)
+    public R visit(DotRecord p, A arg)
     { /* Code for DotRecord goes here */
       p.expr_.accept(new ExprVisitor<R,A>(), arg);
       //p.stellaident_;
       return null;
     }
-    public R visit(org.syntax.stella.Absyn.DotTuple p, A arg)
+    public R visit(DotTuple p, A arg)
     { /* Code for DotTuple goes here */
       p.expr_.accept(new ExprVisitor<R,A>(), arg);
       //p.integer_;
       return null;
     }
-    public R visit(org.syntax.stella.Absyn.Tuple p, A arg)
+    public R visit(Tuple p, A arg)
     { /* Code for Tuple goes here */
-      for (org.syntax.stella.Absyn.Expr x: p.listexpr_) {
+      for (Expr x: p.listexpr_) {
         x.accept(new ExprVisitor<R,A>(), arg);
       }
       return null;
     }
-    public R visit(org.syntax.stella.Absyn.Record p, A arg)
+    public R visit(Record p, A arg)
     { /* Code for Record goes here */
-      for (org.syntax.stella.Absyn.Binding x: p.listbinding_) {
+      for (Binding x: p.listbinding_) {
         x.accept(new BindingVisitor<R,A>(), arg);
       }
       return null;
     }
-    public R visit(org.syntax.stella.Absyn.ConsList p, A arg)
+    public R visit(ConsList p, A arg)
     { /* Code for ConsList goes here */
       p.expr_1.accept(new ExprVisitor<R,A>(), arg);
       p.expr_2.accept(new ExprVisitor<R,A>(), arg);
       return null;
     }
-    public R visit(org.syntax.stella.Absyn.Head p, A arg)
+    public R visit(Head p, A arg)
     { /* Code for Head goes here */
       p.expr_.accept(new ExprVisitor<R,A>(), arg);
       return null;
     }
-    public R visit(org.syntax.stella.Absyn.IsEmpty p, A arg)
+    public R visit(IsEmpty p, A arg)
     { /* Code for IsEmpty goes here */
       p.expr_.accept(new ExprVisitor<R,A>(), arg);
       return null;
     }
-    public R visit(org.syntax.stella.Absyn.Tail p, A arg)
+    public R visit(Tail p, A arg)
     { /* Code for Tail goes here */
       p.expr_.accept(new ExprVisitor<R,A>(), arg);
       return null;
     }
-    public R visit(org.syntax.stella.Absyn.Panic p, A arg)
+    public R visit(Panic p, A arg)
     { /* Code for Panic goes here */
       return null;
     }
-    public R visit(org.syntax.stella.Absyn.Throw p, A arg)
+    public R visit(Throw p, A arg)
     { /* Code for Throw goes here */
       p.expr_.accept(new ExprVisitor<R,A>(), arg);
       return null;
     }
-    public R visit(org.syntax.stella.Absyn.TryCatch p, A arg)
+    public R visit(TryCatch p, A arg)
     { /* Code for TryCatch goes here */
       p.expr_1.accept(new ExprVisitor<R,A>(), arg);
       p.pattern_.accept(new PatternVisitor<R,A>(), arg);
       p.expr_2.accept(new ExprVisitor<R,A>(), arg);
       return null;
     }
-    public R visit(org.syntax.stella.Absyn.TryWith p, A arg)
+    public R visit(TryWith p, A arg)
     { /* Code for TryWith goes here */
       p.expr_1.accept(new ExprVisitor<R,A>(), arg);
       p.expr_2.accept(new ExprVisitor<R,A>(), arg);
       return null;
     }
-    public R visit(org.syntax.stella.Absyn.TryCastAs p, A arg)
+    public R visit(TryCastAs p, A arg)
     { /* Code for TryCastAs goes here */
       p.expr_1.accept(new ExprVisitor<R,A>(), arg);
       p.type_.accept(new TypeVisitor<R,A>(), arg);
@@ -651,118 +790,118 @@ public class VisitSkel
       p.expr_3.accept(new ExprVisitor<R,A>(), arg);
       return null;
     }
-    public R visit(org.syntax.stella.Absyn.Inl p, A arg)
+    public R visit(Inl p, A arg)
     { /* Code for Inl goes here */
       p.expr_.accept(new ExprVisitor<R,A>(), arg);
       return null;
     }
-    public R visit(org.syntax.stella.Absyn.Inr p, A arg)
+    public R visit(Inr p, A arg)
     { /* Code for Inr goes here */
       p.expr_.accept(new ExprVisitor<R,A>(), arg);
       return null;
     }
-    public R visit(org.syntax.stella.Absyn.Succ p, A arg)
+    public R visit(Succ p, A arg)
     { /* Code for Succ goes here */
       p.expr_.accept(new ExprVisitor<R,A>(), arg);
       return null;
     }
-    public R visit(org.syntax.stella.Absyn.LogicNot p, A arg)
+    public R visit(LogicNot p, A arg)
     { /* Code for LogicNot goes here */
       p.expr_.accept(new ExprVisitor<R,A>(), arg);
       return null;
     }
-    public R visit(org.syntax.stella.Absyn.Pred p, A arg)
+    public R visit(Pred p, A arg)
     { /* Code for Pred goes here */
       p.expr_.accept(new ExprVisitor<R,A>(), arg);
       return null;
     }
-    public R visit(org.syntax.stella.Absyn.IsZero p, A arg)
+    public R visit(IsZero p, A arg)
     { /* Code for IsZero goes here */
       p.expr_.accept(new ExprVisitor<R,A>(), arg);
       return null;
     }
-    public R visit(org.syntax.stella.Absyn.Fix p, A arg)
+    public R visit(Fix p, A arg)
     { /* Code for Fix goes here */
       p.expr_.accept(new ExprVisitor<R,A>(), arg);
       return null;
     }
-    public R visit(org.syntax.stella.Absyn.NatRec p, A arg)
+    public R visit(NatRec p, A arg)
     { /* Code for NatRec goes here */
       p.expr_1.accept(new ExprVisitor<R,A>(), arg);
       p.expr_2.accept(new ExprVisitor<R,A>(), arg);
       p.expr_3.accept(new ExprVisitor<R,A>(), arg);
       return null;
     }
-    public R visit(org.syntax.stella.Absyn.Fold p, A arg)
+    public R visit(Fold p, A arg)
     { /* Code for Fold goes here */
       p.type_.accept(new TypeVisitor<R,A>(), arg);
       p.expr_.accept(new ExprVisitor<R,A>(), arg);
       return null;
     }
-    public R visit(org.syntax.stella.Absyn.Unfold p, A arg)
+    public R visit(Unfold p, A arg)
     { /* Code for Unfold goes here */
       p.type_.accept(new TypeVisitor<R,A>(), arg);
       p.expr_.accept(new ExprVisitor<R,A>(), arg);
       return null;
     }
-    public R visit(org.syntax.stella.Absyn.ConstTrue p, A arg)
+    public R visit(ConstTrue p, A arg)
     { /* Code for ConstTrue goes here */
       return null;
     }
-    public R visit(org.syntax.stella.Absyn.ConstFalse p, A arg)
+    public R visit(ConstFalse p, A arg)
     { /* Code for ConstFalse goes here */
       return null;
     }
-    public R visit(org.syntax.stella.Absyn.ConstUnit p, A arg)
+    public R visit(ConstUnit p, A arg)
     { /* Code for ConstUnit goes here */
       return null;
     }
-    public R visit(org.syntax.stella.Absyn.ConstInt p, A arg)
+    public R visit(ConstInt p, A arg)
     { /* Code for ConstInt goes here */
       //p.integer_;
       return null;
     }
-    public R visit(org.syntax.stella.Absyn.ConstMemory p, A arg)
+    public R visit(ConstMemory p, A arg)
     { /* Code for ConstMemory goes here */
       //p.memoryaddress_;
       return null;
     }
-    public R visit(org.syntax.stella.Absyn.Var p, A arg)
+    public R visit(Var p, A arg)
     { /* Code for Var goes here */
       //p.stellaident_;
       return null;
     }
   }
-  public class PatternBindingVisitor<R,A> implements org.syntax.stella.Absyn.PatternBinding.Visitor<R,A>
+  public class PatternBindingVisitor<R,A> implements PatternBinding.Visitor<R,A>
   {
-    public R visit(org.syntax.stella.Absyn.APatternBinding p, A arg)
+    public R visit(APatternBinding p, A arg)
     { /* Code for APatternBinding goes here */
       p.pattern_.accept(new PatternVisitor<R,A>(), arg);
       p.expr_.accept(new ExprVisitor<R,A>(), arg);
       return null;
     }
   }
-  public class VariantFieldTypeVisitor<R,A> implements org.syntax.stella.Absyn.VariantFieldType.Visitor<R,A>
+  public class VariantFieldTypeVisitor<R,A> implements VariantFieldType.Visitor<R,A>
   {
-    public R visit(org.syntax.stella.Absyn.AVariantFieldType p, A arg)
+    public R visit(AVariantFieldType p, A arg)
     { /* Code for AVariantFieldType goes here */
       //p.stellaident_;
       p.optionaltyping_.accept(new OptionalTypingVisitor<R,A>(), arg);
       return null;
     }
   }
-  public class RecordFieldTypeVisitor<R,A> implements org.syntax.stella.Absyn.RecordFieldType.Visitor<R,A>
+  public class RecordFieldTypeVisitor<R,A> implements RecordFieldType.Visitor<R,A>
   {
-    public R visit(org.syntax.stella.Absyn.ARecordFieldType p, A arg)
+    public R visit(ARecordFieldType p, A arg)
     { /* Code for ARecordFieldType goes here */
       //p.stellaident_;
       p.type_.accept(new TypeVisitor<R,A>(), arg);
       return null;
     }
   }
-  public class TypingVisitor<R,A> implements org.syntax.stella.Absyn.Typing.Visitor<R,A>
+  public class TypingVisitor<R,A> implements Typing.Visitor<R,A>
   {
-    public R visit(org.syntax.stella.Absyn.ATyping p, A arg)
+    public R visit(ATyping p, A arg)
     { /* Code for ATyping goes here */
       p.expr_.accept(new ExprVisitor<R,A>(), arg);
       p.type_.accept(new TypeVisitor<R,A>(), arg);

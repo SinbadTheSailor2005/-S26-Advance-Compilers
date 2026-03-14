@@ -2,11 +2,13 @@
 
 package org.syntax.stella.Absyn;
 
-public abstract class PatternData implements java.io.Serializable {
+import java.io.Serializable;
+
+public abstract class PatternData implements Serializable {
   public abstract <R,A> R accept(PatternData.Visitor<R,A> v, A arg);
   public interface Visitor <R,A> {
-    public R visit(org.syntax.stella.Absyn.NoPatternData p, A arg);
-    public R visit(org.syntax.stella.Absyn.SomePatternData p, A arg);
+    public R visit(NoPatternData p, A arg);
+    public R visit(SomePatternData p, A arg);
 
   }
 

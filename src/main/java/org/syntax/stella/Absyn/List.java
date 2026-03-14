@@ -7,12 +7,12 @@ public class List  extends Expr {
   public int line_num, col_num, offset;
   public List(ListExpr p1) { listexpr_ = p1; }
 
-  public <R,A> R accept(org.syntax.stella.Absyn.Expr.Visitor<R,A> v, A arg) { return v.visit(this, arg); }
+  public <R,A> R accept(Expr.Visitor<R,A> v, A arg) { return v.visit(this, arg); }
 
-  public boolean equals(java.lang.Object o) {
+  public boolean equals(Object o) {
     if (this == o) return true;
-    if (o instanceof org.syntax.stella.Absyn.List) {
-      org.syntax.stella.Absyn.List x = (org.syntax.stella.Absyn.List)o;
+    if (o instanceof List) {
+      List x = (List)o;
       return this.listexpr_.equals(x.listexpr_);
     }
     return false;

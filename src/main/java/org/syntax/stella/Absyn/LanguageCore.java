@@ -6,11 +6,11 @@ public class LanguageCore  extends LanguageDecl {
   public int line_num, col_num, offset;
   public LanguageCore() { }
 
-  public <R,A> R accept(org.syntax.stella.Absyn.LanguageDecl.Visitor<R,A> v, A arg) { return v.visit(this, arg); }
+  public <R,A> R accept(LanguageDecl.Visitor<R,A> v, A arg) { return v.visit(this, arg); }
 
-  public boolean equals(java.lang.Object o) {
+  public boolean equals(Object o) {
     if (this == o) return true;
-    if (o instanceof org.syntax.stella.Absyn.LanguageCore) {
+    if (o instanceof LanguageCore) {
       return true;
     }
     return false;

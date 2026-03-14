@@ -8,12 +8,12 @@ public class TypeAbstraction  extends Expr {
   public int line_num, col_num, offset;
   public TypeAbstraction(ListStellaIdent p1, Expr p2) { liststellaident_ = p1; expr_ = p2; }
 
-  public <R,A> R accept(org.syntax.stella.Absyn.Expr.Visitor<R,A> v, A arg) { return v.visit(this, arg); }
+  public <R,A> R accept(Expr.Visitor<R,A> v, A arg) { return v.visit(this, arg); }
 
-  public boolean equals(java.lang.Object o) {
+  public boolean equals(Object o) {
     if (this == o) return true;
-    if (o instanceof org.syntax.stella.Absyn.TypeAbstraction) {
-      org.syntax.stella.Absyn.TypeAbstraction x = (org.syntax.stella.Absyn.TypeAbstraction)o;
+    if (o instanceof TypeAbstraction) {
+      TypeAbstraction x = (TypeAbstraction)o;
       return this.liststellaident_.equals(x.liststellaident_) && this.expr_.equals(x.expr_);
     }
     return false;

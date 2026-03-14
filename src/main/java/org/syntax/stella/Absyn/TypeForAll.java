@@ -8,12 +8,12 @@ public class TypeForAll  extends Type {
   public int line_num, col_num, offset;
   public TypeForAll(ListStellaIdent p1, Type p2) { liststellaident_ = p1; type_ = p2; }
 
-  public <R,A> R accept(org.syntax.stella.Absyn.Type.Visitor<R,A> v, A arg) { return v.visit(this, arg); }
+  public <R,A> R accept(Type.Visitor<R,A> v, A arg) { return v.visit(this, arg); }
 
-  public boolean equals(java.lang.Object o) {
+  public boolean equals(Object o) {
     if (this == o) return true;
-    if (o instanceof org.syntax.stella.Absyn.TypeForAll) {
-      org.syntax.stella.Absyn.TypeForAll x = (org.syntax.stella.Absyn.TypeForAll)o;
+    if (o instanceof TypeForAll) {
+      TypeForAll x = (TypeForAll)o;
       return this.liststellaident_.equals(x.liststellaident_) && this.type_.equals(x.type_);
     }
     return false;
