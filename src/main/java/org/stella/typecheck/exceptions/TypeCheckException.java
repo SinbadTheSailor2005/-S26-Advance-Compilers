@@ -13,6 +13,7 @@ public class TypeCheckException extends RuntimeException {
     this.errorType = errorType;
     this.contextMessage = message == null ? "" : message;
   }
+
   String contextMessage = "";
   private Type expectedType;
   private Type actualType;
@@ -41,15 +42,20 @@ public class TypeCheckException extends RuntimeException {
   private String getErrorContext() {
     StringBuilder sb = new StringBuilder();
     if (contextMessage != null && !contextMessage.isBlank()) {
-      sb.append(contextMessage.trim()).append("\n");
+      sb.append(contextMessage.trim())
+              .append("\n");
     }
 
     // Print expected / actual even if one side is missing: many errors have only one.
     if (expectedType != null) {
-      sb.append("Expected type: ").append(TypePretty.pretty(expectedType)).append("\n");
+      sb.append("Expected type: ")
+              .append(TypePretty.pretty(expectedType))
+              .append("\n");
     }
     if (actualType != null) {
-      sb.append("Actual type:   ").append(TypePretty.pretty(actualType)).append("\n");
+      sb.append("Actual type:   ")
+              .append(TypePretty.pretty(actualType))
+              .append("\n");
     }
 
     if (sb.isEmpty()) return "";
@@ -151,9 +157,22 @@ public class TypeCheckException extends RuntimeException {
     ERROR_DUPLICATE_RECORD_TYPE_FIELDS,
 
 
-    ERROR_DUPLICATE_VARIANT_TYPE_FIELDS;
+    ERROR_DUPLICATE_VARIANT_TYPE_FIELDS,
+    ERROR_EXCEPTION_TYPE_NOT_DECLARED,
 
+    ERROR_AMBIGUOUS_THROW_TYPE,
 
+    ERROR_AMBIGUOUS_REFERENCE_TYPE,
+
+    ERROR_AMBIGUOUS_PANIC_TYPE,
+
+    ERROR_NOT_A_REFERENCE,
+
+    ERROR_UNEXPECTED_MEMORY_ADDRESS,
+
+    ERROR_UNEXPECTED_REFERENCE,
+
+    ERROR_UNEXPECTED_SUBTYPE;
 
 
   }

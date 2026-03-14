@@ -6,9 +6,42 @@ import java.util.*;
 
 public class Context {
 
-
   private final LinkedList<HashMap<String, Type>> scopes = new LinkedList<>();
   private final Deque<Type> expectedTypes = new LinkedList<>();
+
+  private final Set<String> extensions = new HashSet<>();
+
+  private Type exceptionType = null;
+
+  public Context() {
+    enterScope();
+  }
+
+
+  public void addExtension(String extension) {
+    extensions.add(extension);
+  }
+
+  public boolean hasExtension(String extension) {
+    return extensions.contains(extension);
+  }
+
+  public boolean isSubtypingEnabled() {
+    return hasExtension("#structural-subtyping");
+  }
+
+  public boolean isAmbiguousAsBottom() {
+    return hasExtension("#ambiguous-type-as-bottom");
+  }
+
+  public void setExceptionType(Type type) {
+    this.exceptionType = type;
+  }
+
+  public Optional<Type> getExceptionType() {
+    return Optional.ofNullable(exceptionType);
+  }
+
 
   public void pushExpectedType(Type type) {
     expectedTypes.push(type);
@@ -21,12 +54,6 @@ public class Context {
   public Type getCurrentExpectedType() {
     return expectedTypes.peek(); // возвращает null, если стек пуст
   }
-
-  public Context() {
-
-    enterScope();
-  }
-
 
   public LinkedList<HashMap<String, Type>> getScopes() {
     return scopes;
@@ -41,12 +68,10 @@ public class Context {
   }
 
   public void addVariable(String name, Type type) {
-    scopes.getFirst()
-            .put(name, type);
+    scopes.getFirst().put(name, type);
   }
 
   public Optional<Type> lookup(String name) {
-
     for (HashMap<String, Type> scope : scopes) {
       if (scope.containsKey(name)) {
         return Optional.of(scope.get(name));

@@ -1,5 +1,25 @@
 language core;
+extend with #references, #let-bindings, #sequencing;
 
-fn main(n : Nat) -> Nat + Bool {
-  return inl(n)
+// 1. TypeRef: тип "&Nat" означает ссылку на значение типа Nat
+fn add_two(ptr : &Nat) -> Unit {
+  return
+    // 2. Deref (*ptr): разыменование для получения текущего значения
+    // 3. Assign (:=): запись нового значения по ссылке
+    ptr := succ(succ(*ptr));
+    unit
+}
+
+fn main(n : Nat) -> Nat {
+  return
+    // 4. Ref (new): аллокация памяти в куче для значения n
+    let p = new(n) in
+
+    let _ = add_two(p) in
+
+    // 5. ConstMemory: литерал сырого адреса памяти
+    let raw_addr = <0x00FF> in
+
+    // Возвращаем итоговое значение из памяти
+    *p
 }
