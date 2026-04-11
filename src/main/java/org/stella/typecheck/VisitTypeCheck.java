@@ -38,9 +38,10 @@ public class VisitTypeCheck {
 
   public static boolean isSameType(Type t1, Type t2) {
     if (t1 == null || t2 == null) return false;
-    if (t1 instanceof TypeAuto || t2 instanceof TypeAuto) return true;
-    if (t1 instanceof TypeBottom || t2 instanceof TypeBottom) return true;
-
+//    if (t1 instanceof TypeAuto || t2 instanceof TypeAuto) return true;
+//    if (t1 instanceof TypeBottom || t2 instanceof TypeBottom) return true;
+    if (t1 instanceof TypeTop && t2 instanceof TypeTop) return true;
+    if (t1 instanceof TypeBottom && t2 instanceof TypeBottom) return true;
     if (t1 instanceof TypeNat && t2 instanceof TypeNat) return true;
     if (t1 instanceof TypeBool && t2 instanceof TypeBool) return true;
     if (t1 instanceof TypeUnit && t2 instanceof TypeUnit) return true;
@@ -67,7 +68,13 @@ public class VisitTypeCheck {
       return true;
     }
 
+    if (t1 instanceof TypeRef tr1 && t2 instanceof TypeRef tr2) {
+      return isSameType(tr1.type_, tr2.type_);
+    }
 
+    if (t1 instanceof TypeVar tv1 && t2 instanceof TypeVar tv2) {
+      return tv1.stellaident_.equals(tv2.stellaident_);
+    }
     if (t1 instanceof TypeSum ts1 && t2 instanceof TypeSum ts2) {
       return isSameType(ts1.type_1, ts2.type_1) && isSameType(
               ts1.type_2, ts2.type_2);
@@ -295,7 +302,7 @@ public class VisitTypeCheck {
         return isSubtype(sumS.type_1, sumT.type_1, ctx) && isSubtype(sumS.type_2, sumT.type_2, ctx);
       }
 
-      // Инвариантны
+      // ref Инвариантны
       if (S instanceof TypeRef refS && T instanceof TypeRef refT) {
         return isSubtype(refS.type_, refT.type_, ctx) && isSubtype(refT.type_, refS.type_, ctx);
       }
@@ -308,7 +315,7 @@ public class VisitTypeCheck {
             Type actual,
             Context ctx) {
       if (isSubtype(actual, expected, ctx)) return;
-
+      // for correct error reporting
       if (expected instanceof TypeRecord expectedRecord &&
               actual instanceof TypeRecord actualRecord) {
         checkRecordMismatch(expectedRecord, actualRecord, ctx);
@@ -1158,7 +1165,7 @@ public class VisitTypeCheck {
 
         if (expected instanceof TypeFun ef) {
           Type expectedParamType = ef.listtype_.get(0);
-          checkLambdaParameters(expectedParamType, declaredParam.type_);
+          checkLambdaParameters(expectedParamType, declaredParam.type_, ctx);
           expectedReturnType = ef.type_;
         }
 
@@ -1176,12 +1183,16 @@ public class VisitTypeCheck {
         return new TypeFun(lt, actualBodyType);
       }
 
-      private void checkLambdaParameters(Type expectedParamType, Type param) {
-        if (!isSameType(param, expectedParamType)) {
-          throw new TypeCheckException(
-                  TypeCheckException.ErrorType.ERROR_UNEXPECTED_TYPE_FOR_PARAMETER,
-                  expectedParamType, param
-          );
+      private void checkLambdaParameters(Type expectedParamType, Type param, Context ctx) {
+        if (ctx.isSubtypingEnabled()) {
+          checkForMismatch(param, expectedParamType, ctx);
+        } else {
+          if (!isSameType(param, expectedParamType)) {
+            throw new TypeCheckException(
+                    TypeCheckException.ErrorType.ERROR_UNEXPECTED_TYPE_FOR_PARAMETER,
+                    expectedParamType, param
+            );
+          }
         }
       }
 
@@ -1510,7 +1521,6 @@ public class VisitTypeCheck {
             );
           }
         }
-
         ctx.pushExpectedType(expectedInner);
         Type innerType = p.expr_.accept(this, ctx);
         ctx.popExpectedType();
@@ -1723,62 +1733,56 @@ public class VisitTypeCheck {
        * @param ctx
        * @return
        */
-      public Type visit(Record p, Context ctx) {
-        ListRecordFieldType fieldTypes =
-                new ListRecordFieldType();
-        Set<String> seenFields = new HashSet<>();
+        public Type visit(Record p, Context ctx) {
+          ListRecordFieldType fieldTypes = new ListRecordFieldType();
+          Set<String> seenFields = new HashSet<>();
 
-        TypeRecord expectedRecord = null;
-        if (ctx.getCurrentExpectedType() != null) {
-          expectedRecord = chekIfExprectedTypeIsRecord(ctx);
-        }
-
-        for (Binding binding : p.listbinding_) {
-          ABinding b =
-                  (ABinding) binding;
-
-          // чекаем кейс  {a=1, a=2}
-          if (seenFields.contains(b.stellaident_)) {
-            throw new TypeCheckException(
-                    TypeCheckException.ErrorType.ERROR_DUPLICATE_RECORD_FIELDS,
-                    "Duplicate field '" + b.stellaident_ + "' in record construction"
-            );
+          TypeRecord expectedRecord = null;
+          if (ctx.getCurrentExpectedType() != null) {
+            expectedRecord = chekIfExprectedTypeIsRecord(ctx);
           }
-          seenFields.add(b.stellaident_);
 
-          Type expectedFieldType = null;
+          for (Binding binding : p.listbinding_) {
+            ABinding b = (ABinding) binding;
+
+            if (seenFields.contains(b.stellaident_)) {
+              throw new TypeCheckException(
+                      TypeCheckException.ErrorType.ERROR_DUPLICATE_RECORD_FIELDS,
+                      "Duplicate field '" + b.stellaident_ + "' in record construction"
+              );
+            }
+            seenFields.add(b.stellaident_);
+
+            Optional<Type> expectedFieldTypeOpt = (expectedRecord != null)
+                    ? tryFindFieldTypeForRecord(expectedRecord, b.stellaident_)
+                    : Optional.empty();
+
+            if (expectedRecord != null && expectedFieldTypeOpt.isEmpty() && !ctx.isSubtypingEnabled()) {
+              throw new TypeCheckException(
+                      TypeCheckException.ErrorType.ERROR_UNEXPECTED_RECORD_FIELDS,
+                      "Unexpected field '" + b.stellaident_ + "' in record construction."
+              );
+            }
+
+            Type expectedFieldType = expectedFieldTypeOpt.orElse(null);
+            ctx.pushExpectedType(expectedFieldType);
+            Type fieldType = b.expr_.accept(new ExprVisitor(), ctx);
+            ctx.popExpectedType();
+
+            if (expectedFieldType != null) {
+              checkForMismatch(expectedFieldType, fieldType, ctx);
+            }
+
+            fieldTypes.add(new ARecordFieldType(b.stellaident_, fieldType));
+          }
+
+          TypeRecord actualType = new TypeRecord(fieldTypes);
           if (expectedRecord != null) {
-            expectedFieldType =
-                    tryFindFieldTypeForRecord(
-                            expectedRecord, b.stellaident_).orElseThrow(
-                            () -> new TypeCheckException(
-                                    TypeCheckException.ErrorType.ERROR_UNEXPECTED_RECORD_FIELDS,
-                                    "Unexpected field '" + b.stellaident_ + "' in record construction."
-                            ));
-
+            checkRecordMismatch(expectedRecord, actualType, ctx);
           }
 
-          ctx.pushExpectedType(expectedFieldType);
-          Type fieldType = b.expr_.accept(new ExprVisitor(), ctx);
-          ctx.popExpectedType();
-
-          if (expectedFieldType != null) {
-            checkForMismatch(expectedFieldType, fieldType, ctx);
-          }
-
-          fieldTypes.add(
-                  new ARecordFieldType(
-                          b.stellaident_, fieldType));
+          return actualType;
         }
-
-        TypeRecord actualType =
-                new TypeRecord(fieldTypes);
-        if (expectedRecord != null) {
-          checkRecordMismatch(expectedRecord, actualType, ctx);
-        }
-
-        return actualType;
-      }
 
       private TypeRecord chekIfExprectedTypeIsRecord(Context ctx) {
         TypeRecord expectedRecord;
@@ -1971,8 +1975,10 @@ public class VisitTypeCheck {
         ctx.popExpectedType();
 
         ctx.pushExpectedType(tryType);
-        p.expr_2.accept(new ExprVisitor(), ctx);
+        Type accept = p.expr_2.accept(new ExprVisitor(), ctx);
         ctx.popExpectedType();
+
+        checkForMismatch(tryType, accept, ctx);
 
         ctx.exitScope();
         return tryType;
@@ -1982,9 +1988,10 @@ public class VisitTypeCheck {
         Type tryType = p.expr_1.accept(new ExprVisitor(), ctx);
 
         ctx.pushExpectedType(tryType);
-        p.expr_2.accept(new ExprVisitor(), ctx);
+        Type accept = p.expr_2.accept(new ExprVisitor(), ctx);
         ctx.popExpectedType();
 
+        checkForMismatch(tryType, accept, ctx);
         return tryType;
       }
 
@@ -2003,12 +2010,35 @@ public class VisitTypeCheck {
               Inl p,
               Context ctx) { /* Code for Inl goes here */
         Type currentExpected = ctx.getCurrentExpectedType();
-        checkForAmbiguousSumType(currentExpected);
-        TypeSum ts = checkThatExpectSumType(currentExpected);
+
+        if (currentExpected == null) {
+          if (ctx.isAmbiguousAsBottom()) {
+            ctx.pushExpectedType(null);
+            Type actualInner = p.expr_.accept(this, ctx);
+            ctx.popExpectedType();
+
+            return new TypeSum(actualInner, new TypeBottom());
+          }
+
+          throw new TypeCheckException(
+                  TypeCheckException.ErrorType.ERROR_AMBIGUOUS_SUM_TYPE,
+                  "Cannot infer type for 'inl' injection without context."
+          );
+        }
+
+        if (!(currentExpected instanceof TypeSum ts)) {
+          throw new TypeCheckException(
+                  TypeCheckException.ErrorType.ERROR_UNEXPECTED_INJECTION,
+                  "Expected " + TypePretty.pretty(currentExpected) + " but found inl(...)"
+          );
+        }
+
         ctx.pushExpectedType(ts.type_1);
-        var t1 = p.expr_.accept(new ExprVisitor(), ctx);
+        Type actualInner = p.expr_.accept(this, ctx);
         ctx.popExpectedType();
-        checkForMismatch(ts.type_1, t1, ctx);
+
+        checkForMismatch(ts.type_1, actualInner, ctx);
+
         return currentExpected;
       }
 
@@ -2016,12 +2046,32 @@ public class VisitTypeCheck {
               Inr p,
               Context ctx) { /* Code for Inr goes here */
         Type currentExpected = ctx.getCurrentExpectedType();
-        checkForAmbiguousSumType(currentExpected);
-        TypeSum ts = checkThatExpectSumType(currentExpected);
+
+        if (currentExpected == null) {
+          if (ctx.isAmbiguousAsBottom()) {
+            ctx.pushExpectedType(null);
+            Type actualInner = p.expr_.accept(this, ctx);
+            ctx.popExpectedType();
+            return new TypeSum(new TypeBottom(), actualInner);
+          }
+          throw new TypeCheckException(
+                  TypeCheckException.ErrorType.ERROR_AMBIGUOUS_SUM_TYPE,
+                  "Cannot infer type for 'inr' without context."
+          );
+        }
+
+        if (!(currentExpected instanceof TypeSum ts)) {
+          throw new TypeCheckException(
+                  TypeCheckException.ErrorType.ERROR_UNEXPECTED_INJECTION,
+                  "Expected " + TypePretty.pretty(currentExpected) + " but found inr(...)"
+          );
+        }
+
         ctx.pushExpectedType(ts.type_2);
-        var t1 = p.expr_.accept(new ExprVisitor(), ctx);
+        Type actualInner = p.expr_.accept(this, ctx);
         ctx.popExpectedType();
-        checkForMismatch(t1, ts.type_2, ctx);
+        checkForMismatch(ts.type_2, actualInner, ctx);
+
         return currentExpected;
       }
 
