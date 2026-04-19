@@ -1,9 +1,17 @@
 package org.stella.typecheck.exceptions;
 
 import org.stella.typecheck.TypePretty;
-import org.syntax.stella.Absyn.Type;
+import org.syntax.stella.Absyn.*;
+
+import java.util.HashMap;
+import java.util.Map;
+
+import static org.stella.typecheck.VisitTypeCheck.ProgramVisitor.getOptionalTypingType;
+import static org.stella.typecheck.VisitTypeCheck.isSameType;
 
 public class TypeCheckException extends RuntimeException {
+
+
   public TypeCheckException(
           String message, Type expectedType, Type actualType,
           ErrorType errorType) {
@@ -142,7 +150,6 @@ public class TypeCheckException extends RuntimeException {
     ERROR_AMBIGUOUS_LIST_TYPE,
 
 
-
     ERROR_ILLEGAL_EMPTY_MATCHING,
 
 
@@ -173,8 +180,10 @@ public class TypeCheckException extends RuntimeException {
 
     ERROR_UNEXPECTED_REFERENCE,
 
-    ERROR_UNEXPECTED_SUBTYPE;
-
+    ERROR_UNEXPECTED_SUBTYPE,
+    ERROR_OCCURS_CHECK_INFINITE_TYPE,
+    ERROR_NOT_A_GENERIC_FUNCTION,
+    ERROR_UNDEFINED_TYPE_VARIABLE;
 
   }
 

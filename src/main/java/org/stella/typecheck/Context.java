@@ -8,16 +8,47 @@ public class Context {
 
   private final LinkedList<HashMap<String, Type>> scopes = new LinkedList<>();
   private final Deque<Type> expectedTypes = new LinkedList<>();
-
+  LinkedList<Set<String>> typeVarsScopes = new LinkedList<>();
   private final Set<String> extensions = new HashSet<>();
 
   private Type exceptionType = null;
 
   public Context() {
     enterScope();
+    enterTypeVarScope();
   }
 
+  public boolean isReconstructionEnabled() {
+    return hasExtension("#type-reconstruction");
+  }
 
+  public boolean isUniversalTypesEnabled() {
+    return hasExtension("#universal-types");
+  }
+
+  // --- Управление переменными типа (п. 3.2.3)  ---
+  public void enterTypeVarScope() {
+    typeVarsScopes.addFirst(new HashSet<>());
+  }
+
+  public void popTypeVarScope() {
+    typeVarsScopes.removeFirst();
+  }
+
+  public void addTypeVariable(String name) {
+    // Проверка на дубликаты для экстра-баллов (п. 3.2.4) [cite: 101]
+    if (typeVarsScopes.getFirst().contains(name)) {
+      // throw new TypeCheckException(ERROR_DUPLICATE_TYPE_PARAMETER)
+    }
+    typeVarsScopes.getFirst().add(name);
+  }
+
+  public boolean isTypeVarDefined(String name) {
+    for (Set<String> scope : typeVarsScopes) {
+      if (scope.contains(name)) return true;
+    }
+    return false;
+  }
   public void addExtension(String extension) {
     extensions.add(extension);
   }

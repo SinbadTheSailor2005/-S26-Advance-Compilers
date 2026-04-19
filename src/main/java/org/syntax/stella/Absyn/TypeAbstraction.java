@@ -3,7 +3,7 @@
 package org.syntax.stella.Absyn;
 
 public class TypeAbstraction  extends Expr {
-  public final ListStellaIdent liststellaident_;
+  public final ListStellaIdent liststellaident_; // лист дженериков
   public final Expr expr_;
   public int line_num, col_num, offset;
   public TypeAbstraction(ListStellaIdent p1, Expr p2) { liststellaident_ = p1; expr_ = p2; }

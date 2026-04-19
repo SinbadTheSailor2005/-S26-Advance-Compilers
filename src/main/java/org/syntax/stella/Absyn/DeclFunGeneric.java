@@ -5,7 +5,7 @@ package org.syntax.stella.Absyn;
 public class DeclFunGeneric  extends Decl {
   public final ListAnnotation listannotation_;
   public final String stellaident_;
-  public final ListStellaIdent liststellaident_;
+  public final ListStellaIdent liststellaident_; // список типов generic
   public final ListParamDecl listparamdecl_;
   public final ReturnType returntype_;
   public final ThrowType throwtype_;

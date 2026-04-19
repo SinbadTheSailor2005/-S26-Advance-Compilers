@@ -9,7 +9,6 @@ fn add_two(ptr : &Nat) -> Unit {
     ptr := succ(succ(*ptr));
     unit
 }
-
 fn main(n : Nat) -> Nat {
   return
     // 4. Ref (new): аллокация памяти в куче для значения n

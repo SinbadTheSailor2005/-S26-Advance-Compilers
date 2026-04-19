@@ -4,14 +4,13 @@ package org.stella.typecheck;
 
 import org.stella.typecheck.exceptions.TypeCheckException;
 import org.syntax.stella.Absyn.*;
+import org.syntax.stella.Absyn.List;
 import org.syntax.stella.Absyn.Record;
 
-import java.util.ArrayList;
-import java.util.HashSet;
-import java.util.Optional;
-import java.util.Set;
+import java.util.*;
 
 import static org.stella.typecheck.VisitTypeCheck.ProgramVisitor.getOptionalTypingType;
+import static org.stella.typecheck.VisitTypeCheck.ProgramVisitor.isSubtype;
 
 /*** Visitor Design Pattern Skeleton. ***/
 
@@ -22,7 +21,198 @@ import static org.stella.typecheck.VisitTypeCheck.ProgramVisitor.getOptionalTypi
    and context types.*/
 
 public class VisitTypeCheck {
+  private int typeVarCounter = 1;
 
+  // хранит найденные соответствия типов , eg 1T -> Nat
+  private final Map<String, Type> substitutions = new HashMap<>();
+
+  public TypeVar freshTypeVar() {
+    return new TypeVar("?T" + (typeVarCounter++));
+  }
+
+  public Type resolve(Type t) {
+    if (t instanceof TypeVar tv) {
+      String varName = tv.stellaident_;
+      if (substitutions.containsKey(varName)) {
+        return resolve(substitutions.get(varName));
+      }
+    }
+    return t; // Если это не переменная или её нет в мапе, возвращаем как есть
+  }
+
+  public void unify(Type expected, Type actual, Context ctx) {
+    Type t1 = resolve(expected);
+    Type t2 = resolve(actual);
+
+    if (isSameType(t1, t2)) return;
+
+    if (ctx.isSubtypingEnabled() && isSubtype(t2, t1, ctx)) {
+      return;
+    }
+
+    if (t1 instanceof TypeVar v1) {
+      bindVar(v1.stellaident_, t2);
+      return;
+    }
+
+    if (t2 instanceof TypeVar v2) {
+      bindVar(v2.stellaident_, t1);
+      return;
+    }
+
+    if (t1 instanceof TypeFun f1 && t2 instanceof TypeFun f2) {
+      if (f1.listtype_.size() != f2.listtype_.size()) throwMismatch(t1, t2);
+      for (int i = 0; i < f1.listtype_.size(); i++) {
+        unify(f1.listtype_.get(i), f2.listtype_.get(i), ctx);
+      }
+      unify(f1.type_, f2.type_, ctx);
+      return;
+    }
+
+    if (t1 instanceof TypeList l1 && t2 instanceof TypeList l2) {
+      unify(l1.type_, l2.type_, ctx);
+      return;
+    }
+
+    if (t1 instanceof TypeTuple tup1 && t2 instanceof TypeTuple tup2) {
+      if (tup1.listtype_.size() != tup2.listtype_.size())
+        throwMismatch(t1, tup2);
+      for (int i = 0; i < tup1.listtype_.size(); i++) {
+        unify(tup1.listtype_.get(i), tup2.listtype_.get(i), ctx);
+      }
+      return;
+    }
+
+    if (t1 instanceof TypeSum s1 && t2 instanceof TypeSum s2) {
+      unify(s1.type_1, s2.type_1, ctx);
+      unify(s1.type_2, s2.type_2, ctx);
+      return;
+    }
+
+    if (t1 instanceof TypeRef r1 && t2 instanceof TypeRef r2) {
+      unify(r1.type_, r2.type_, ctx);
+      return;
+    }
+    throwMismatch(t1, t2);
+  }
+
+  private void bindVar(String varName, Type type) {
+    if (occursIn(varName, type)) {
+      throw new TypeCheckException(
+              TypeCheckException.ErrorType.ERROR_OCCURS_CHECK_INFINITE_TYPE,
+              "Infinite type: " + varName + " in " + TypePretty.pretty(type)
+      );
+    }
+    substitutions.put(varName, type);
+  }
+
+
+  private boolean occursIn(String varName, Type t) {
+    Type resolvedType = resolve(t);
+
+    if (resolvedType instanceof TypeVar tv) {
+      return tv.stellaident_.equals(varName);
+    }
+
+    if (resolvedType instanceof TypeFun tf) {
+      for (Type paramType : tf.listtype_) {
+        if (occursIn(varName, paramType)) return true;
+      }
+      return occursIn(varName, tf.type_);
+    }
+
+    if (resolvedType instanceof TypeTuple tt) {
+      for (Type elemType : tt.listtype_) {
+        if (occursIn(varName, elemType)) return true;
+      }
+      return false;
+    }
+
+    if (resolvedType instanceof TypeList tl) {
+      return occursIn(varName, tl.type_);
+    }
+
+    if (resolvedType instanceof TypeSum ts) {
+      return occursIn(varName, ts.type_1) || occursIn(varName, ts.type_2);
+    }
+
+    if (resolvedType instanceof TypeRef tr) {
+      return occursIn(varName, tr.type_);
+    }
+
+    if (resolvedType instanceof TypeRecord trc) {
+      for (RecordFieldType f : trc.listrecordfieldtype_) {
+        ARecordFieldType field = (ARecordFieldType) f;
+        if (occursIn(varName, field.type_)) return true;
+      }
+      return false;
+    }
+
+    if (resolvedType instanceof TypeVariant tv) {
+      for (VariantFieldType f : tv.listvariantfieldtype_) {
+        AVariantFieldType vField = (AVariantFieldType) f;
+        Type innerType = getOptionalTypingType(vField.optionaltyping_);
+        if (innerType != null && occursIn(varName, innerType)) {
+          return true;
+        }
+      }
+      return false;
+    }
+
+    return false;
+  }
+
+  private void throwMismatch(Type expected, Type actual) {
+    throw new TypeCheckException(
+            TypeCheckException.ErrorType.ERROR_UNEXPECTED_TYPE_FOR_EXPRESSION,
+            expected, actual
+    );
+  }
+
+  public static Type substitute(Type t, String varName, Type replacement) {
+    if (t == null) return null;
+
+    if (t instanceof TypeVar tv) {
+      if (tv.stellaident_.equals(varName)) {
+        return replacement;
+      }
+      return tv;
+    }
+    if (t instanceof TypeFun tf) {
+      ListType newParams = new ListType();
+      for (Type p : tf.listtype_)
+        newParams.add(substitute(p, varName, replacement));
+      return new TypeFun(newParams, substitute(tf.type_, varName, replacement));
+    }
+    if (t instanceof TypeForAll tfa) {
+      if (tfa.liststellaident_.contains(varName)) {
+        return tfa;
+      }
+      return new TypeForAll(
+              tfa.liststellaident_,
+              substitute(tfa.type_, varName, replacement)
+      );
+    }
+    if (t instanceof TypeList tl) {
+      return new TypeList(substitute(tl.type_, varName, replacement));
+    }
+    if (t instanceof TypeTuple tt) {
+      ListType newTypes = new ListType();
+      for (Type type : tt.listtype_)
+        newTypes.add(substitute(type, varName, replacement));
+      return new TypeTuple(newTypes);
+    }
+    if (t instanceof TypeSum ts) {
+      return new TypeSum(
+              substitute(ts.type_1, varName, replacement),
+              substitute(ts.type_2, varName, replacement)
+      );
+    }
+    if (t instanceof TypeRef tr) {
+      return new TypeRef(substitute(tr.type_, varName, replacement));
+    }
+    return t;
+  }
 
   public static Optional<AVariantFieldType> getAVariantFieldType(
           String stellaident_, TypeVariant typeVariant) {
@@ -38,14 +228,24 @@ public class VisitTypeCheck {
 
   public static boolean isSameType(Type t1, Type t2) {
     if (t1 == null || t2 == null) return false;
-//    if (t1 instanceof TypeAuto || t2 instanceof TypeAuto) return true;
-//    if (t1 instanceof TypeBottom || t2 instanceof TypeBottom) return true;
     if (t1 instanceof TypeTop && t2 instanceof TypeTop) return true;
     if (t1 instanceof TypeBottom && t2 instanceof TypeBottom) return true;
     if (t1 instanceof TypeNat && t2 instanceof TypeNat) return true;
     if (t1 instanceof TypeBool && t2 instanceof TypeBool) return true;
     if (t1 instanceof TypeUnit && t2 instanceof TypeUnit) return true;
+    if (t1 instanceof TypeForAll tfa1 && t2 instanceof TypeForAll tfa2) {
+      if (tfa1.liststellaident_.size() != tfa2.liststellaident_.size())
+        return false;
 
+      Type body2 = tfa2.type_;
+      // Подставляем имена переменных из первого типа во второй
+      for (int i = 0; i < tfa1.liststellaident_.size(); i++) {
+        String var1 = tfa1.liststellaident_.get(i);
+        String var2 = tfa2.liststellaident_.get(i);
+        body2 = substitute(body2, var2, new TypeVar(var1));
+      }
+      return isSameType(tfa1.type_, body2);
+    }
 
     if (t1 instanceof TypeFun tf1 && t2 instanceof TypeFun tf2) {
       return isSameType(
@@ -181,10 +381,24 @@ public class VisitTypeCheck {
         if (x instanceof DeclFun df) {
           Type argType = ((AParamDecl) df.listparamdecl_.getFirst()).type_;
           Type returnType =
-                  (df.returntype_ instanceof SomeReturnType srt) ? srt.type_ : null;
+                  (df.returntype_ instanceof SomeReturnType srt) ? srt.type_ : new TypeUnit();
           ListType lt = new ListType();
           lt.add(argType);
           ctx.addVariable(df.stellaident_, new TypeFun(lt, returnType));
+        } else if (x instanceof DeclFunGeneric dfg) {
+          Type argType = ((AParamDecl) dfg.listparamdecl_.getFirst()).type_;
+          Type returnType =
+                  (dfg.returntype_ instanceof SomeReturnType srt) ? srt.type_ : new TypeUnit();
+          ListType lt = new ListType();
+          lt.add(argType);
+          TypeFun funType = new TypeFun(lt, returnType);
+
+          org.syntax.stella.Absyn.ListStellaIdent typeVars =
+                  new org.syntax.stella.Absyn.ListStellaIdent();
+          typeVars.addAll(dfg.liststellaident_);
+
+          // Тип дженерик-функции — это forall X. fn(T) -> R
+          ctx.addVariable(dfg.stellaident_, new TypeForAll(typeVars, funType));
         }
       }
     }
@@ -250,7 +464,8 @@ public class VisitTypeCheck {
         if (funS.listtype_.size() != funT.listtype_.size()) return false;
         // T_arg <: S_arg
         for (int i = 0; i < funS.listtype_.size(); i++) {
-          if (!isSubtype(funT.listtype_.get(i), funS.listtype_.get(i), ctx)) return false;
+          if (!isSubtype(funT.listtype_.get(i), funS.listtype_.get(i), ctx))
+            return false;
         }
         // S_ret <: T_ret
         return isSubtype(funS.type_, funT.type_, ctx);
@@ -263,7 +478,8 @@ public class VisitTypeCheck {
           ARecordFieldType afS = findRecordField(recS, afT.stellaident_);
 
           if (afS == null) return false;
-          if (!isSubtype(afS.type_, afT.type_, ctx)) return false; // Типы полей ковариантны
+          if (!isSubtype(afS.type_, afT.type_, ctx))
+            return false; // Типы полей ковариантны
         }
         return true;
       }
@@ -290,7 +506,8 @@ public class VisitTypeCheck {
       if (S instanceof TypeTuple tupS && T instanceof TypeTuple tupT) {
         if (tupS.listtype_.size() != tupT.listtype_.size()) return false;
         for (int i = 0; i < tupS.listtype_.size(); i++) {
-          if (!isSubtype(tupS.listtype_.get(i), tupT.listtype_.get(i), ctx)) return false;
+          if (!isSubtype(tupS.listtype_.get(i), tupT.listtype_.get(i), ctx))
+            return false;
         }
         return true;
       }
@@ -299,46 +516,19 @@ public class VisitTypeCheck {
       }
 
       if (S instanceof TypeSum sumS && T instanceof TypeSum sumT) {
-        return isSubtype(sumS.type_1, sumT.type_1, ctx) && isSubtype(sumS.type_2, sumT.type_2, ctx);
+        return isSubtype(sumS.type_1, sumT.type_1, ctx) && isSubtype(
+                sumS.type_2, sumT.type_2, ctx);
       }
 
       // ref Инвариантны
       if (S instanceof TypeRef refS && T instanceof TypeRef refT) {
-        return isSubtype(refS.type_, refT.type_, ctx) && isSubtype(refT.type_, refS.type_, ctx);
+        return isSubtype(refS.type_, refT.type_, ctx) && isSubtype(
+                refT.type_, refS.type_, ctx);
       }
 
       return false;
     }
 
-    public static void checkForMismatch(
-            Type expected,
-            Type actual,
-            Context ctx) {
-      if (isSubtype(actual, expected, ctx)) return;
-      // for correct error reporting
-      if (expected instanceof TypeRecord expectedRecord &&
-              actual instanceof TypeRecord actualRecord) {
-        checkRecordMismatch(expectedRecord, actualRecord, ctx);
-      }
-
-      if (expected instanceof TypeVariant expectedVariant &&
-              actual instanceof TypeVariant actualVariant) {
-        checkVariantMismatch(expectedVariant, actualVariant, ctx);
-      }
-
-      if (ctx.isSubtypingEnabled()) {
-        throw new TypeCheckException(
-                TypeCheckException.ErrorType.ERROR_UNEXPECTED_SUBTYPE,
-                "Expected a subtype of type " + TypePretty.pretty(expected) +
-                        " but found type " + TypePretty.pretty(actual)
-        );
-      } else {
-        throw new TypeCheckException(
-                TypeCheckException.ErrorType.ERROR_UNEXPECTED_TYPE_FOR_EXPRESSION,
-                expected, actual
-        );
-      }
-    }
 
     public static void checkVariantMismatch(
             TypeVariant expected,
@@ -362,8 +552,10 @@ public class VisitTypeCheck {
       }
       if (!unexpected.isEmpty()) {
         throw new TypeCheckException(
-                TypeCheckException.ErrorType.ERROR_UNEXPECTED_VARIANT_LABEL, // Или другая подходящая ошибка
-                "Variant type has unexpected labels: " + String.join(", ", unexpected)
+                TypeCheckException.ErrorType.ERROR_UNEXPECTED_VARIANT_LABEL,
+                // Или другая подходящая ошибка
+                "Variant type has unexpected labels: " + String.join(
+                        ", ", unexpected)
         );
       }
 
@@ -376,7 +568,8 @@ public class VisitTypeCheck {
         if (!ctx.isSubtypingEnabled()) {
           throw new TypeCheckException(
                   TypeCheckException.ErrorType.ERROR_MISSING_VARIANT_LABELS,
-                  "Variant type is missing required labels: " + String.join(", ", missing)
+                  "Variant type is missing required labels: " + String.join(
+                          ", ", missing)
           );
         }
       }
@@ -405,7 +598,8 @@ public class VisitTypeCheck {
       if (!missing.isEmpty()) {
         throw new TypeCheckException(
                 TypeCheckException.ErrorType.ERROR_MISSING_RECORD_FIELDS,
-                "Record is missing required fields: " + String.join(", ", missing)
+                "Record is missing required fields: " + String.join(
+                        ", ", missing)
         );
       }
 
@@ -418,14 +612,16 @@ public class VisitTypeCheck {
         if (!ctx.isSubtypingEnabled()) {
           throw new TypeCheckException(
                   TypeCheckException.ErrorType.ERROR_UNEXPECTED_RECORD_FIELDS,
-                  "Record contains unexpected fields: " + String.join(", ", unexpected)
+                  "Record contains unexpected fields: " + String.join(
+                          ", ", unexpected)
           );
         }
       }
     }
 
     // Хелперы для чистоты кода
-    private static ARecordFieldType findRecordField(TypeRecord rec, String name) {
+    private static ARecordFieldType findRecordField(
+            TypeRecord rec, String name) {
       for (RecordFieldType f : rec.listrecordfieldtype_) {
         ARecordFieldType af = (ARecordFieldType) f;
         if (af.stellaident_.equals(name)) return af;
@@ -433,7 +629,8 @@ public class VisitTypeCheck {
       return null;
     }
 
-    private static AVariantFieldType findVariantField(TypeVariant var, String name) {
+    private static AVariantFieldType findVariantField(
+            TypeVariant var, String name) {
       for (VariantFieldType f : var.listvariantfieldtype_) {
         AVariantFieldType af = (AVariantFieldType) f;
         if (af.stellaident_.equals(name)) return af;
@@ -466,7 +663,7 @@ public class VisitTypeCheck {
         ctx.pushExpectedType(expectedRetType);
         Type actualRetType = p.expr_.accept(new ExprVisitor(), ctx);
         ctx.popExpectedType();
-        checkForMismatch(expectedRetType, actualRetType, ctx);
+        unify(expectedRetType, actualRetType, ctx);
 
 
         ctx.exitScope();
@@ -500,22 +697,35 @@ public class VisitTypeCheck {
       }
 
 
-      public Type visit(
-              DeclFunGeneric p,
-              Context ctx) { /* Code for DeclFunGeneric goes here */
-        for (Annotation x : p.listannotation_) {
-          x.accept(new AnnotationVisitor(), ctx);
+      public Type visit(DeclFunGeneric p, Context ctx) {
+        ctx.enterScope();
+        ctx.enterTypeVarScope();
+
+        for (String typeVar : p.liststellaident_) {
+          ctx.addTypeVariable(typeVar);
         }
 
         for (ParamDecl x : p.listparamdecl_) {
-          x.accept(new ParamDeclVisitor(), ctx);
+          if (x instanceof AParamDecl ap) {
+            ap.type_.accept(
+                    new TypeVisitor(),
+                    ctx
+            );
+            ctx.addVariable(ap.stellaident_, ap.type_);
+          }
         }
-        p.returntype_.accept(new ReturnTypeVisitor(), ctx);
-        p.throwtype_.accept(new ThrowTypeVisitor(), ctx);
-        for (Decl x : p.listdecl_) {
-          x.accept(new DeclVisitor(), ctx);
-        }
-        p.expr_.accept(new ExprVisitor(), ctx);
+
+        Type expectedRetType =
+                p.returntype_.accept(new ReturnTypeVisitor(), ctx);
+        ctx.pushExpectedType(expectedRetType);
+
+        Type actualRetType = p.expr_.accept(new ExprVisitor(), ctx);
+
+        ctx.popExpectedType();
+        unify(expectedRetType, actualRetType, ctx);
+
+        ctx.popTypeVarScope();
+        ctx.exitScope();
         return null;
       }
 
@@ -693,13 +903,20 @@ public class VisitTypeCheck {
       }
 
       public Type visit(TypeAuto p, Context ctx) {
-        return p;
+        return freshTypeVar();
       }
 
+      @Override
       public Type visit(TypeForAll p, Context ctx) {
+        ctx.enterTypeVarScope();
+        for (String typeVar : p.liststellaident_) {
+          ctx.addTypeVariable(typeVar);
+        }
+        p.type_.accept(
+                this, ctx); // Проверяем внутренний тип с новыми переменными
+        ctx.popTypeVarScope();
         return p;
       }
-
 
       public Type visit(TypeTop p, Context ctx) {
         return p;
@@ -715,6 +932,18 @@ public class VisitTypeCheck {
       }
 
       public Type visit(TypeVar p, Context ctx) {
+        if (p.stellaident_.equals("auto")) {
+          return freshTypeVar();
+        }
+        // для auto
+        if (p.stellaident_.startsWith("?T")) return p;
+        // дженерики
+        if (!ctx.isTypeVarDefined(p.stellaident_)) {
+          throw new TypeCheckException(
+                  TypeCheckException.ErrorType.ERROR_UNDEFINED_TYPE_VARIABLE,
+                  "Undefined type variable: " + p.stellaident_
+          );
+        }
         return p;
       }
     }
@@ -820,8 +1049,10 @@ public class VisitTypeCheck {
           somePat.accept(new PatternDataVisitor(), ctx);
           ctx.popExpectedType();
         } else {
-          checkForMismatch(fieldContentType,
-                  new TypeUnit(), ctx);
+          unify(
+                  fieldContentType,
+                  new TypeUnit(), ctx
+          );
         }
 
         return expectedType;
@@ -972,7 +1203,7 @@ public class VisitTypeCheck {
         Type t1 = p.expr_1.accept(this, ctx);
         ctx.popExpectedType();
 
-        checkForMismatch(new TypeUnit(), t1, ctx);
+        unify(new TypeUnit(), t1, ctx);
 
         Type expectedForSeq = ctx.getCurrentExpectedType();
 
@@ -1007,11 +1238,30 @@ public class VisitTypeCheck {
       }
 
       // its fot Genretics
-      public Type visit(
-              TypeAbstraction p,
-              Context ctx) { /* Code for TypeAbstraction goes here */
-        p.expr_.accept(new ExprVisitor(), ctx);
-        return null;
+      public Type visit(TypeAbstraction p, Context ctx) {
+        ctx.enterTypeVarScope();
+        for (String typeVar : p.liststellaident_) {
+          ctx.addTypeVariable(typeVar);
+        }
+
+        ctx.pushExpectedType(null);
+        Type innerType = p.expr_.accept(this, ctx);
+        ctx.popExpectedType();
+
+        ctx.popTypeVarScope();
+
+        org.syntax.stella.Absyn.ListStellaIdent typeVars =
+                new org.syntax.stella.Absyn.ListStellaIdent();
+        typeVars.addAll(p.liststellaident_);
+
+        Type result = new TypeForAll(typeVars, innerType);
+
+        Type expected = ctx.getCurrentExpectedType();
+        if (expected != null) {
+          unify(expected, result, ctx);
+        }
+
+        return result;
       }
 
       public Type visit(Assign p, Context ctx) {
@@ -1032,7 +1282,7 @@ public class VisitTypeCheck {
         Type rhsType = p.expr_2.accept(this, ctx);
         ctx.popExpectedType();
 
-        checkForMismatch(expectedValueType, rhsType, ctx);
+        unify(expectedValueType, rhsType, ctx);
 
         return new TypeUnit();
       }
@@ -1057,7 +1307,7 @@ public class VisitTypeCheck {
         Type t3 = p.expr_3.accept(this, ctx);
         ctx.popExpectedType();
 
-        checkForMismatch(t2, t3, ctx);
+        unify(t2, t3, ctx);
 
         return t2;
       }
@@ -1133,7 +1383,7 @@ public class VisitTypeCheck {
         ctx.pushExpectedType(expectedType);
         var actualType = p.expr_.accept(new ExprVisitor(), ctx);
         ctx.popExpectedType();
-        checkForMismatch(expectedType, actualType, ctx);
+        unify(expectedType, actualType, ctx);
         return expectedType;
       }
 
@@ -1183,9 +1433,10 @@ public class VisitTypeCheck {
         return new TypeFun(lt, actualBodyType);
       }
 
-      private void checkLambdaParameters(Type expectedParamType, Type param, Context ctx) {
+      private void checkLambdaParameters(
+              Type expectedParamType, Type param, Context ctx) {
         if (ctx.isSubtypingEnabled()) {
-          checkForMismatch(param, expectedParamType, ctx);
+          unify(param, expectedParamType, ctx);
         } else {
           if (!isSameType(param, expectedParamType)) {
             throw new TypeCheckException(
@@ -1224,10 +1475,12 @@ public class VisitTypeCheck {
           ctx.pushExpectedType(fieldType);
           Type actualType = data.expr_.accept(this, ctx);
           ctx.popExpectedType();
-          checkForMismatch(fieldType, actualType, ctx);
+          unify(fieldType, actualType, ctx);
         } else {
-          checkForMismatch(fieldType, new TypeUnit(),
-                  ctx);
+          unify(
+                  fieldType, new TypeUnit(),
+                  ctx
+          );
         }
 
         return typeVariant;
@@ -1316,7 +1569,7 @@ public class VisitTypeCheck {
             ctx.pushExpectedType(expectedForCase);
             bodyType = c.expr_.accept(this, ctx);
             ctx.popExpectedType();
-            checkForMismatch(expectedForCase, bodyType, ctx);
+            unify(expectedForCase, bodyType, ctx);
           } else {
             bodyType = c.expr_.accept(this, ctx);
             inferredReturnType = bodyType;
@@ -1406,7 +1659,7 @@ public class VisitTypeCheck {
           if (finalElementType == null) {
             finalElementType = itemType;
           } else {
-            checkForMismatch(finalElementType, itemType, ctx);
+            unify(finalElementType, itemType, ctx);
           }
         }
 
@@ -1553,33 +1806,59 @@ public class VisitTypeCheck {
 
       public Type visit(Application p, Context ctx) {
         ctx.pushExpectedType(null);
-        var t1 = p.expr_.accept(new ExprVisitor(), ctx);
+        Type funType = p.expr_.accept(this, ctx);
         ctx.popExpectedType();
-        checkThatTypeIsTypeFun(t1);
 
-        TypeFun funType = (TypeFun) t1;
-        Type expectedParamType = funType.listtype_.get(0);
         Expr argExpr = p.listexpr_.getFirst();
-/**
- * я знаю сигу Application. Значит, тип аргумента ф-ии == типу параметра
- * Applcation*/
-        ctx.pushExpectedType(expectedParamType);
-        Type t2 = argExpr.accept(new ExprVisitor(), ctx);
+        ctx.pushExpectedType(null);
+        Type argType = argExpr.accept(this, ctx);
         ctx.popExpectedType();
-        checkForMismatch(expectedParamType, t2, ctx);
 
-        return funType.type_;
+        Type returnTypeVar = freshTypeVar();
+        ListType expectedParamTypes = new ListType();
+        expectedParamTypes.add(argType);
+        Type expectedFunType = new TypeFun(expectedParamTypes, returnTypeVar);
+
+        unify(funType, expectedFunType, ctx);
+        return resolve(returnTypeVar);
       }
 
 
-      public Type visit(
-              TypeApplication p,
-              Context ctx) { /* Code for TypeApplication goes here */
-        p.expr_.accept(new ExprVisitor(), ctx);
-        for (Type x : p.listtype_) {
-          x.accept(new TypeVisitor(), ctx);
+      public Type visit(TypeApplication p, Context ctx) {
+        ctx.pushExpectedType(null);
+        Type exprType = p.expr_.accept(this, ctx);
+        ctx.popExpectedType();
+
+        Type resolvedExprType = resolve(exprType);
+
+        if (!(resolvedExprType instanceof TypeForAll tfa)) {
+          throw new TypeCheckException(
+                  TypeCheckException.ErrorType.ERROR_NOT_A_GENERIC_FUNCTION,
+                  "Expected a generic function, but got: " + TypePretty.pretty(
+                          resolvedExprType)
+          );
         }
-        return null;
+
+        Type resultType = tfa.type_;
+
+        for (int i =
+             0; i < tfa.liststellaident_.size() && i < p.listtype_.size(); i++) {
+          String varName = tfa.liststellaident_.get(i);
+          Type argType = p.listtype_.get(i);
+
+          argType.accept(
+                  new TypeVisitor(),
+                  ctx
+          );
+          resultType = substitute(resultType, varName, argType);
+        }
+
+        Type expected = ctx.getCurrentExpectedType();
+        if (expected != null) {
+          unify(expected, resultType, ctx);
+        }
+
+        return resultType;
       }
 
       /**
@@ -1733,56 +2012,56 @@ public class VisitTypeCheck {
        * @param ctx
        * @return
        */
-        public Type visit(Record p, Context ctx) {
-          ListRecordFieldType fieldTypes = new ListRecordFieldType();
-          Set<String> seenFields = new HashSet<>();
+      public Type visit(Record p, Context ctx) {
+        ListRecordFieldType fieldTypes = new ListRecordFieldType();
+        Set<String> seenFields = new HashSet<>();
 
-          TypeRecord expectedRecord = null;
-          if (ctx.getCurrentExpectedType() != null) {
-            expectedRecord = chekIfExprectedTypeIsRecord(ctx);
-          }
-
-          for (Binding binding : p.listbinding_) {
-            ABinding b = (ABinding) binding;
-
-            if (seenFields.contains(b.stellaident_)) {
-              throw new TypeCheckException(
-                      TypeCheckException.ErrorType.ERROR_DUPLICATE_RECORD_FIELDS,
-                      "Duplicate field '" + b.stellaident_ + "' in record construction"
-              );
-            }
-            seenFields.add(b.stellaident_);
-
-            Optional<Type> expectedFieldTypeOpt = (expectedRecord != null)
-                    ? tryFindFieldTypeForRecord(expectedRecord, b.stellaident_)
-                    : Optional.empty();
-
-            if (expectedRecord != null && expectedFieldTypeOpt.isEmpty() && !ctx.isSubtypingEnabled()) {
-              throw new TypeCheckException(
-                      TypeCheckException.ErrorType.ERROR_UNEXPECTED_RECORD_FIELDS,
-                      "Unexpected field '" + b.stellaident_ + "' in record construction."
-              );
-            }
-
-            Type expectedFieldType = expectedFieldTypeOpt.orElse(null);
-            ctx.pushExpectedType(expectedFieldType);
-            Type fieldType = b.expr_.accept(new ExprVisitor(), ctx);
-            ctx.popExpectedType();
-
-            if (expectedFieldType != null) {
-              checkForMismatch(expectedFieldType, fieldType, ctx);
-            }
-
-            fieldTypes.add(new ARecordFieldType(b.stellaident_, fieldType));
-          }
-
-          TypeRecord actualType = new TypeRecord(fieldTypes);
-          if (expectedRecord != null) {
-            checkRecordMismatch(expectedRecord, actualType, ctx);
-          }
-
-          return actualType;
+        TypeRecord expectedRecord = null;
+        if (ctx.getCurrentExpectedType() != null) {
+          expectedRecord = chekIfExprectedTypeIsRecord(ctx);
         }
+
+        for (Binding binding : p.listbinding_) {
+          ABinding b = (ABinding) binding;
+
+          if (seenFields.contains(b.stellaident_)) {
+            throw new TypeCheckException(
+                    TypeCheckException.ErrorType.ERROR_DUPLICATE_RECORD_FIELDS,
+                    "Duplicate field '" + b.stellaident_ + "' in record construction"
+            );
+          }
+          seenFields.add(b.stellaident_);
+
+          Optional<Type> expectedFieldTypeOpt = (expectedRecord != null)
+                  ? tryFindFieldTypeForRecord(expectedRecord, b.stellaident_)
+                  : Optional.empty();
+
+          if (expectedRecord != null && expectedFieldTypeOpt.isEmpty() && !ctx.isSubtypingEnabled()) {
+            throw new TypeCheckException(
+                    TypeCheckException.ErrorType.ERROR_UNEXPECTED_RECORD_FIELDS,
+                    "Unexpected field '" + b.stellaident_ + "' in record construction."
+            );
+          }
+
+          Type expectedFieldType = expectedFieldTypeOpt.orElse(null);
+          ctx.pushExpectedType(expectedFieldType);
+          Type fieldType = b.expr_.accept(new ExprVisitor(), ctx);
+          ctx.popExpectedType();
+
+          if (expectedFieldType != null) {
+            unify(expectedFieldType, fieldType, ctx);
+          }
+
+          fieldTypes.add(new ARecordFieldType(b.stellaident_, fieldType));
+        }
+
+        TypeRecord actualType = new TypeRecord(fieldTypes);
+        if (expectedRecord != null) {
+          checkRecordMismatch(expectedRecord, actualType, ctx);
+        }
+
+        return actualType;
+      }
 
       private TypeRecord chekIfExprectedTypeIsRecord(Context ctx) {
         TypeRecord expectedRecord;
@@ -1841,7 +2120,7 @@ public class VisitTypeCheck {
         if (expectedElementType == null) {
           expectedElementType = headType;
         } else {
-          checkForMismatch(expectedElementType, headType, ctx);
+          unify(expectedElementType, headType, ctx);
         }
 
         TypeList expectedTailType =
@@ -1849,7 +2128,7 @@ public class VisitTypeCheck {
 
         Type tailType = checkTail(p, ctx, expectedTailType);
 
-        checkForMismatch(expectedTailType, tailType, ctx);
+        unify(expectedTailType, tailType, ctx);
 
         return expectedTailType;
       }
@@ -1963,10 +2242,11 @@ public class VisitTypeCheck {
       public Type visit(TryCatch p, Context ctx) {
         Type tryType = p.expr_1.accept(new ExprVisitor(), ctx);
 
-        Type exceptionType = ctx.getExceptionType().orElseThrow(() -> new TypeCheckException(
-                TypeCheckException.ErrorType.ERROR_EXCEPTION_TYPE_NOT_DECLARED,
-                "The program uses exceptions but their type is not declared."
-        ));
+        Type exceptionType = ctx.getExceptionType()
+                .orElseThrow(() -> new TypeCheckException(
+                        TypeCheckException.ErrorType.ERROR_EXCEPTION_TYPE_NOT_DECLARED,
+                        "The program uses exceptions but their type is not declared."
+                ));
 
         ctx.enterScope();
 
@@ -1978,7 +2258,7 @@ public class VisitTypeCheck {
         Type accept = p.expr_2.accept(new ExprVisitor(), ctx);
         ctx.popExpectedType();
 
-        checkForMismatch(tryType, accept, ctx);
+        unify(tryType, accept, ctx);
 
         ctx.exitScope();
         return tryType;
@@ -1991,7 +2271,7 @@ public class VisitTypeCheck {
         Type accept = p.expr_2.accept(new ExprVisitor(), ctx);
         ctx.popExpectedType();
 
-        checkForMismatch(tryType, accept, ctx);
+        unify(tryType, accept, ctx);
         return tryType;
       }
 
@@ -2029,7 +2309,8 @@ public class VisitTypeCheck {
         if (!(currentExpected instanceof TypeSum ts)) {
           throw new TypeCheckException(
                   TypeCheckException.ErrorType.ERROR_UNEXPECTED_INJECTION,
-                  "Expected " + TypePretty.pretty(currentExpected) + " but found inl(...)"
+                  "Expected " + TypePretty.pretty(
+                          currentExpected) + " but found inl(...)"
           );
         }
 
@@ -2037,7 +2318,7 @@ public class VisitTypeCheck {
         Type actualInner = p.expr_.accept(this, ctx);
         ctx.popExpectedType();
 
-        checkForMismatch(ts.type_1, actualInner, ctx);
+        unify(ts.type_1, actualInner, ctx);
 
         return currentExpected;
       }
@@ -2063,14 +2344,15 @@ public class VisitTypeCheck {
         if (!(currentExpected instanceof TypeSum ts)) {
           throw new TypeCheckException(
                   TypeCheckException.ErrorType.ERROR_UNEXPECTED_INJECTION,
-                  "Expected " + TypePretty.pretty(currentExpected) + " but found inr(...)"
+                  "Expected " + TypePretty.pretty(
+                          currentExpected) + " but found inr(...)"
           );
         }
 
         ctx.pushExpectedType(ts.type_2);
         Type actualInner = p.expr_.accept(this, ctx);
         ctx.popExpectedType();
-        checkForMismatch(ts.type_2, actualInner, ctx);
+        unify(ts.type_2, actualInner, ctx);
 
         return currentExpected;
       }
@@ -2154,7 +2436,7 @@ public class VisitTypeCheck {
         Type argType = funType.listtype_.getFirst();
         Type retType = funType.type_;
 
-        checkForMismatch(argType, retType, ctx);
+        unify(argType, retType, ctx);
 
 
         return argType;
@@ -2191,7 +2473,7 @@ public class VisitTypeCheck {
         var t3 = p.expr_3.accept(new ExprVisitor(), ctx);
         ctx.popExpectedType();
 
-        checkForMismatch(expectedStepType, t3, ctx);
+        unify(expectedStepType, t3, ctx);
 
         return t2;
       }
@@ -2333,7 +2615,7 @@ public class VisitTypeCheck {
 
         ctx.popExpectedType();
 
-        checkForMismatch(expectedType, actualType, ctx);
+        unify(expectedType, actualType, ctx);
 
         return actualType;
       }
