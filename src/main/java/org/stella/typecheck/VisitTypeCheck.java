@@ -22,8 +22,30 @@ import static org.stella.typecheck.VisitTypeCheck.ProgramVisitor.isSubtype;
 
 public class VisitTypeCheck {
   private int typeVarCounter = 1;
+  private int genericVarCounter = 0;
+  private final Map<String, Stack<String>> typeVarMapping = new HashMap<>();
+  org.syntax.stella.Absyn.ListStellaIdent renamedVars = new org.syntax.stella.Absyn.ListStellaIdent();
+  private String pushTypeVar(String originalName) {
+    String freshName = originalName + "_g" + (++genericVarCounter);
+    typeVarMapping.computeIfAbsent(originalName, k -> new Stack<>()).push(freshName);
+    return freshName;
+  }
 
-  // хранит найденные соответствия типов , eg 1T -> Nat
+  private void popTypeVar(String originalName) {
+    Stack<String> stack = typeVarMapping.get(originalName);
+    if (stack != null && !stack.isEmpty()) {
+      stack.pop();
+    }
+  }
+
+  private String getMappedTypeVar(String originalName) {
+    Stack<String> stack = typeVarMapping.get(originalName);
+    if (stack == null || stack.isEmpty()) {
+      return originalName;
+    }
+    return stack.peek();
+  }
+  
   private final Map<String, Type> substitutions = new HashMap<>();
 
   public TypeVar freshTypeVar() {
@@ -37,7 +59,7 @@ public class VisitTypeCheck {
         return resolve(substitutions.get(varName));
       }
     }
-    return t; // Если это не переменная или её нет в мапе, возвращаем как есть
+    return t; 
   }
 
   public void unify(Type expected, Type actual, Context ctx) {
@@ -50,12 +72,12 @@ public class VisitTypeCheck {
       return;
     }
 
-    if (t1 instanceof TypeVar v1) {
+    if (t1 instanceof TypeVar v1 && v1.stellaident_.startsWith("?T")) {
       bindVar(v1.stellaident_, t2);
       return;
     }
 
-    if (t2 instanceof TypeVar v2) {
+    if (t2 instanceof TypeVar v2 && v2.stellaident_.startsWith("?T")) {
       bindVar(v2.stellaident_, t1);
       return;
     }
@@ -88,7 +110,52 @@ public class VisitTypeCheck {
       unify(s1.type_2, s2.type_2, ctx);
       return;
     }
+    if (t1 instanceof TypeRecord tr1 && t2 instanceof TypeRecord tr2) {
+      if (tr1.listrecordfieldtype_.size() != tr2.listrecordfieldtype_.size()) {
+        throwMismatch(t1, t2);
+      }
+      for (RecordFieldType f1_abstract : tr1.listrecordfieldtype_) {
+        ARecordFieldType f1 = (ARecordFieldType) f1_abstract;
+        boolean found = false;
+        for (RecordFieldType f2_abstract : tr2.listrecordfieldtype_) {
+          ARecordFieldType f2 = (ARecordFieldType) f2_abstract;
+          if (f1.stellaident_.equals(f2.stellaident_)) {
+            
+            unify(f1.type_, f2.type_, ctx);
+            found = true;
+            break;
+          }
+        }
+        if (!found) throwMismatch(t1, t2);
+      }
+      return;
+    }
 
+    if (t1 instanceof TypeVariant tv1 && t2 instanceof TypeVariant tv2) {
+      if (tv1.listvariantfieldtype_.size() != tv2.listvariantfieldtype_.size()) {
+        throwMismatch(t1, t2);
+      }
+      for (VariantFieldType f1_abstract : tv1.listvariantfieldtype_) {
+        AVariantFieldType f1 = (AVariantFieldType) f1_abstract;
+        boolean found = false;
+        for (VariantFieldType f2_abstract : tv2.listvariantfieldtype_) {
+          AVariantFieldType f2 = (AVariantFieldType) f2_abstract;
+          if (f1.stellaident_.equals(f2.stellaident_)) {
+            Type inner1 = getOptionalTypingType(f1.optionaltyping_);
+            Type inner2 = getOptionalTypingType(f2.optionaltyping_);
+            if (inner1 != null && inner2 != null) {
+              unify(inner1, inner2, ctx);
+            } else if (inner1 != null || inner2 != null) {
+              throwMismatch(t1, t2);
+            }
+            found = true;
+            break;
+          }
+        }
+        if (!found) throwMismatch(t1, t2);
+      }
+      return;
+    }
     if (t1 instanceof TypeRef r1 && t2 instanceof TypeRef r2) {
       unify(r1.type_, r2.type_, ctx);
       return;
@@ -238,7 +305,7 @@ public class VisitTypeCheck {
         return false;
 
       Type body2 = tfa2.type_;
-      // Подставляем имена переменных из первого типа во второй
+      
       for (int i = 0; i < tfa1.liststellaident_.size(); i++) {
         String var1 = tfa1.liststellaident_.get(i);
         String var2 = tfa2.liststellaident_.get(i);
@@ -353,9 +420,9 @@ public class VisitTypeCheck {
             AProgram p,
             Context ctx) { /* Code for AProgram goes here */
       p.languagedecl_.accept(new LanguageDeclVisitor(), ctx);
-//      for (org.syntax.stella.Absyn.Extension x : p.listextension_) {
-//        x.accept(new ExtensionVisitor(), ctx);
-//      }
+
+
+
       checkMain(p.listdecl_);
       ctx.enterScope();
       addGlobalFunctionsToGlobalScope(p, ctx);
@@ -379,30 +446,43 @@ public class VisitTypeCheck {
     private void addGlobalFunctionsToGlobalScope(AProgram p, Context ctx) {
       for (Decl x : p.listdecl_) {
         if (x instanceof DeclFun df) {
-          Type argType = ((AParamDecl) df.listparamdecl_.getFirst()).type_;
-          Type returnType =
-                  (df.returntype_ instanceof SomeReturnType srt) ? srt.type_ : new TypeUnit();
+          Type rawArgType = ((AParamDecl) df.listparamdecl_.getFirst()).type_;
+          Type argType = rawArgType.accept(new TypeVisitor(), ctx);
+
+          Type rawReturnType = (df.returntype_ instanceof SomeReturnType srt) ? srt.type_ : new TypeUnit();
+          Type returnType = rawReturnType.accept(new TypeVisitor(), ctx);
+
           ListType lt = new ListType();
           lt.add(argType);
           ctx.addVariable(df.stellaident_, new TypeFun(lt, returnType));
+
         } else if (x instanceof DeclFunGeneric dfg) {
-          Type argType = ((AParamDecl) dfg.listparamdecl_.getFirst()).type_;
-          Type returnType =
-                  (dfg.returntype_ instanceof SomeReturnType srt) ? srt.type_ : new TypeUnit();
+          
+          ctx.enterTypeVarScope();
+          for (String typeVar : dfg.liststellaident_) {
+            ctx.addTypeVariable(typeVar);
+            renamedVars.add(pushTypeVar(typeVar));
+          }
+
+          Type rawArgType = ((AParamDecl) dfg.listparamdecl_.getFirst()).type_;
+          Type argType = rawArgType.accept(new TypeVisitor(), ctx);
+
+          Type rawReturnType = (dfg.returntype_ instanceof SomeReturnType srt) ? srt.type_ : new TypeUnit();
+          Type returnType = rawReturnType.accept(new TypeVisitor(), ctx);
+
+          for (String typeVar : dfg.liststellaident_) {
+            popTypeVar(typeVar); 
+          }
+          ctx.popTypeVarScope();
+
           ListType lt = new ListType();
           lt.add(argType);
           TypeFun funType = new TypeFun(lt, returnType);
 
-          org.syntax.stella.Absyn.ListStellaIdent typeVars =
-                  new org.syntax.stella.Absyn.ListStellaIdent();
-          typeVars.addAll(dfg.liststellaident_);
-
-          // Тип дженерик-функции — это forall X. fn(T) -> R
-          ctx.addVariable(dfg.stellaident_, new TypeForAll(typeVars, funType));
+          ctx.addVariable(dfg.stellaident_, new TypeForAll(renamedVars, funType));
         }
       }
     }
-
     private void checkMain(ListDecl listdecl) {
       var declType = checkMainExistence(listdecl);
       checkMainType(declType);
@@ -445,7 +525,7 @@ public class VisitTypeCheck {
       public Type visit(
               AnExtension p,
               Context ctx) { /* Code for AnExtension goes here */
-        // Extensions are ignored in this typechecker implementation.
+        
         return null;
       }
     }
@@ -462,30 +542,30 @@ public class VisitTypeCheck {
 
       if (S instanceof TypeFun funS && T instanceof TypeFun funT) {
         if (funS.listtype_.size() != funT.listtype_.size()) return false;
-        // T_arg <: S_arg
+        
         for (int i = 0; i < funS.listtype_.size(); i++) {
           if (!isSubtype(funT.listtype_.get(i), funS.listtype_.get(i), ctx))
             return false;
         }
-        // S_ret <: T_ret
+        
         return isSubtype(funS.type_, funT.type_, ctx);
       }
 
       if (S instanceof TypeRecord recS && T instanceof TypeRecord recT) {
-        // У подтипа обязаны быть все поля супертипа
+        
         for (RecordFieldType fT : recT.listrecordfieldtype_) {
           ARecordFieldType afT = (ARecordFieldType) fT;
           ARecordFieldType afS = findRecordField(recS, afT.stellaident_);
 
           if (afS == null) return false;
           if (!isSubtype(afS.type_, afT.type_, ctx))
-            return false; // Типы полей ковариантны
+            return false; 
         }
         return true;
       }
 
       if (S instanceof TypeVariant varS && T instanceof TypeVariant varT) {
-        // тут наоборот у супертипа обязаны быть все варианты подтипа
+        
         for (VariantFieldType fS : varS.listvariantfieldtype_) {
           AVariantFieldType afS = (AVariantFieldType) fS;
           AVariantFieldType afT = findVariantField(varT, afS.stellaident_);
@@ -520,7 +600,7 @@ public class VisitTypeCheck {
                 sumS.type_2, sumT.type_2, ctx);
       }
 
-      // ref Инвариантны
+      
       if (S instanceof TypeRef refS && T instanceof TypeRef refT) {
         return isSubtype(refS.type_, refT.type_, ctx) && isSubtype(
                 refT.type_, refS.type_, ctx);
@@ -545,7 +625,7 @@ public class VisitTypeCheck {
         actualLabels.add(((AVariantFieldType) f).stellaident_);
       }
 
-      // В сабтайпинге подтип НЕ может иметь лишних лейблов, которых нет в супертипе.
+      
       java.util.List<String> unexpected = new ArrayList<>();
       for (String label : actualLabels) {
         if (!expectedLabels.contains(label)) unexpected.add(label);
@@ -553,13 +633,13 @@ public class VisitTypeCheck {
       if (!unexpected.isEmpty()) {
         throw new TypeCheckException(
                 TypeCheckException.ErrorType.ERROR_UNEXPECTED_VARIANT_LABEL,
-                // Или другая подходящая ошибка
+                
                 "Variant type has unexpected labels: " + String.join(
                         ", ", unexpected)
         );
       }
 
-      // Но подтип МОЖЕТ не иметь некоторых лейблов супертипа (если сабтайпинг включен).
+      
       java.util.List<String> missing = new ArrayList<>();
       for (String label : expectedLabels) {
         if (!actualLabels.contains(label)) missing.add(label);
@@ -590,7 +670,7 @@ public class VisitTypeCheck {
         actualFields.add(((ARecordFieldType) f).stellaident_);
       }
 
-      // Подтип ОБЯЗАН иметь все поля супертипа. Отсутствие поля - всегда ошибка.
+      
       java.util.List<String> missing = new ArrayList<>();
       for (String f : expectedFields) {
         if (!actualFields.contains(f)) missing.add(f);
@@ -603,7 +683,7 @@ public class VisitTypeCheck {
         );
       }
 
-      // Подтип МОЖЕТ иметь дополнительные поля, если сабтайпинг включен.
+      
       java.util.List<String> unexpected = new ArrayList<>();
       for (String f : actualFields) {
         if (!expectedFields.contains(f)) unexpected.add(f);
@@ -619,7 +699,7 @@ public class VisitTypeCheck {
       }
     }
 
-    // Хелперы для чистоты кода
+    
     private static ARecordFieldType findRecordField(
             TypeRecord rec, String name) {
       for (RecordFieldType f : rec.listrecordfieldtype_) {
@@ -650,7 +730,18 @@ public class VisitTypeCheck {
       public Type visit(DeclFun p, Context ctx) {
         ctx.enterScope();
 
-        addParametersToContext(p, ctx);
+
+        Type funSig = ctx.lookup(p.stellaident_).orElse(null);
+        Type expectedRetType;
+
+        if (funSig instanceof TypeFun tf) {
+          AParamDecl ap = (AParamDecl) p.listparamdecl_.getFirst();
+          ctx.addVariable(ap.stellaident_, tf.listtype_.getFirst());
+          expectedRetType = tf.type_;
+        } else {
+          addParametersToContext(p, ctx);
+          expectedRetType = p.returntype_.accept(new ReturnTypeVisitor(), ctx);
+        }
 
         addMethodDeclarationsToContext(p, ctx);
 
@@ -658,13 +749,10 @@ public class VisitTypeCheck {
           decl.accept(this, ctx);
         }
 
-        Type expectedRetType =
-                p.returntype_.accept(new ReturnTypeVisitor(), ctx);
         ctx.pushExpectedType(expectedRetType);
         Type actualRetType = p.expr_.accept(new ExprVisitor(), ctx);
         ctx.popExpectedType();
         unify(expectedRetType, actualRetType, ctx);
-
 
         ctx.exitScope();
 
@@ -674,10 +762,11 @@ public class VisitTypeCheck {
       private void addMethodDeclarationsToContext(DeclFun p, Context ctx) {
         for (Decl decl : p.listdecl_) {
           if (decl instanceof DeclFun df) {
-            Type argType = ((AParamDecl) df.listparamdecl_.getFirst()).type_;
+            Type rawArgType = ((AParamDecl) df.listparamdecl_.getFirst()).type_;
+            Type argType = rawArgType.accept(new TypeVisitor(), ctx);
 
-            Type retType =
-                    (df.returntype_ instanceof SomeReturnType srt) ? srt.type_ : new TypeUnit();
+            Type rawRetType = (df.returntype_ instanceof SomeReturnType srt) ? srt.type_ : new TypeUnit();
+            Type retType = rawRetType.accept(new TypeVisitor(), ctx);
 
             ListType paramTypes = new ListType();
             paramTypes.add(argType);
@@ -691,7 +780,8 @@ public class VisitTypeCheck {
       private void addParametersToContext(DeclFun p, Context ctx) {
         for (ParamDecl x : p.listparamdecl_) {
           if (x instanceof AParamDecl ap) {
-            ctx.addVariable(ap.stellaident_, ap.type_);
+            Type paramType = ap.type_.accept(new TypeVisitor(), ctx);
+            ctx.addVariable(ap.stellaident_, paramType);
           }
         }
       }
@@ -703,20 +793,17 @@ public class VisitTypeCheck {
 
         for (String typeVar : p.liststellaident_) {
           ctx.addTypeVariable(typeVar);
+          pushTypeVar(typeVar);
         }
 
         for (ParamDecl x : p.listparamdecl_) {
           if (x instanceof AParamDecl ap) {
-            ap.type_.accept(
-                    new TypeVisitor(),
-                    ctx
-            );
-            ctx.addVariable(ap.stellaident_, ap.type_);
+            Type paramType = ap.type_.accept(new TypeVisitor(), ctx);
+            ctx.addVariable(ap.stellaident_, paramType);
           }
         }
 
-        Type expectedRetType =
-                p.returntype_.accept(new ReturnTypeVisitor(), ctx);
+        Type expectedRetType = p.returntype_.accept(new ReturnTypeVisitor(), ctx);
         ctx.pushExpectedType(expectedRetType);
 
         Type actualRetType = p.expr_.accept(new ExprVisitor(), ctx);
@@ -724,6 +811,9 @@ public class VisitTypeCheck {
         ctx.popExpectedType();
         unify(expectedRetType, actualRetType, ctx);
 
+        for (String typeVar : p.liststellaident_) {
+          popTypeVar(typeVar);
+        }
         ctx.popTypeVarScope();
         ctx.exitScope();
         return null;
@@ -753,7 +843,7 @@ public class VisitTypeCheck {
       }
     }
 
-    // ------------------
+    
     public class LocalDeclVisitor implements LocalDecl.Visitor<Type, Context> {
       public Type visit(
               ALocalDecl p,
@@ -763,7 +853,7 @@ public class VisitTypeCheck {
       }
     }
 
-    // ------------------
+    
     public static class AnnotationVisitor implements Annotation.Visitor<Type, Context> {
       public Type visit(
               InlineAnnotation p,
@@ -772,7 +862,7 @@ public class VisitTypeCheck {
       }
     }
 
-    // ------------------
+    
     public class ParamDeclVisitor implements ParamDecl.Visitor<Type, Context> {
       public Type visit(
               AParamDecl p,
@@ -782,7 +872,7 @@ public class VisitTypeCheck {
       }
     }
 
-    // ------------------
+    
     public class ReturnTypeVisitor implements ReturnType.Visitor<Type, Context> {
       public Type visit(
               NoReturnType p,
@@ -797,7 +887,7 @@ public class VisitTypeCheck {
       }
     }
 
-    // ------------------
+    
     public class ThrowTypeVisitor implements ThrowType.Visitor<Type, Context> {
       public Type visit(
               NoThrowType p,
@@ -815,80 +905,19 @@ public class VisitTypeCheck {
       }
     }
 
-    // ------------------
+    
 
     /**
      * просто чекаем дуюдикаты
      */
     public class TypeVisitor implements Type.Visitor<Type, Context> {
-      @Override
-      public Type visit(TypeRecord p, Context ctx) {
-        Set<String> fields = new HashSet<>();
-        for (RecordFieldType f : p.listrecordfieldtype_) {
-          ARecordFieldType field =
-                  (ARecordFieldType) f;
 
-          if (fields.contains(field.stellaident_)) {
-            throw new TypeCheckException(
-                    TypeCheckException.ErrorType.ERROR_DUPLICATE_RECORD_TYPE_FIELDS,
-                    "Duplicate field '" + field.stellaident_ + "' in record " + p
-            );
-          }
-          fields.add(field.stellaident_);
-
-          field.type_.accept(this, ctx);
-        }
-        return p;
-      }
-
-      @Override
-      public Type visit(TypeVariant p, Context ctx) {
-        Set<String> labels = new HashSet<>();
-        for (VariantFieldType f : p.listvariantfieldtype_) {
-          AVariantFieldType field =
-                  (AVariantFieldType) f;
-
-          if (labels.contains(field.stellaident_)) {
-            throw new TypeCheckException(
-                    TypeCheckException.ErrorType.ERROR_DUPLICATE_VARIANT_TYPE_FIELDS,
-                    "Duplicate label '" + field.stellaident_ + "'"
-            );
-          }
-          labels.add(field.stellaident_);
-
-          field.accept(new VariantFieldTypeVisitor(), ctx);
-        }
-        return p;
-      }
-
-      // TODO: Diferrence TypeRec vs TypeRecord
+      
       public Type visit(TypeRec p, Context ctx) {
         return p;
       }
 
-      public Type visit(TypeFun p, Context ctx) {
-        // assumed that 1 param only
-        for (Type paramType : p.listtype_)
-          paramType.accept(this, ctx);
-        p.type_.accept(this, ctx);
-        return p;
-      }
 
-      public Type visit(TypeTuple p, Context ctx) {
-        for (Type t : p.listtype_) t.accept(this, ctx);
-        return p;
-      }
-
-      public Type visit(TypeSum p, Context ctx) {
-        p.type_1.accept(this, ctx);
-        p.type_2.accept(this, ctx);
-        return p;
-      }
-
-      public Type visit(TypeList p, Context ctx) {
-        p.type_.accept(this, ctx);
-        return p;
-      }
 
       public Type visit(TypeNat p, Context ctx) {
         return p;
@@ -909,13 +938,41 @@ public class VisitTypeCheck {
       @Override
       public Type visit(TypeForAll p, Context ctx) {
         ctx.enterTypeVarScope();
+        org.syntax.stella.Absyn.ListStellaIdent renamedVars = new org.syntax.stella.Absyn.ListStellaIdent();
+
         for (String typeVar : p.liststellaident_) {
           ctx.addTypeVariable(typeVar);
+          renamedVars.add(pushTypeVar(typeVar));
         }
-        p.type_.accept(
-                this, ctx); // Проверяем внутренний тип с новыми переменными
+
+        Type bodyType = p.type_.accept(this, ctx);
+
+        for (String typeVar : p.liststellaident_) {
+          popTypeVar(typeVar);
+        }
         ctx.popTypeVarScope();
-        return p;
+
+        return new TypeForAll(renamedVars, bodyType);
+      }
+
+      public Type visit(TypeVar p, Context ctx) {
+        if (p.stellaident_.equals("auto")) {
+          return freshTypeVar();
+        }
+
+        if (p.stellaident_.startsWith("?T")) {
+          return p;
+        }
+
+        if (!ctx.isTypeVarDefined(p.stellaident_)) {
+          throw new TypeCheckException(
+                  TypeCheckException.ErrorType.ERROR_UNDEFINED_TYPE_VARIABLE,
+                  "Undefined type variable: " + p.stellaident_
+          );
+        }
+
+        
+        return new TypeVar(getMappedTypeVar(p.stellaident_));
       }
 
       public Type visit(TypeTop p, Context ctx) {
@@ -926,25 +983,92 @@ public class VisitTypeCheck {
         return p;
       }
 
-      public Type visit(TypeRef p, Context ctx) {
-        p.type_.accept(this, ctx);
-        return p;
+
+
+
+
+
+      
+      @Override
+      public Type visit(TypeRecord p, Context ctx) {
+        Set<String> fields = new HashSet<>();
+        ListRecordFieldType newFields = new ListRecordFieldType();
+
+        for (RecordFieldType f : p.listrecordfieldtype_) {
+          ARecordFieldType field = (ARecordFieldType) f;
+
+          if (fields.contains(field.stellaident_)) {
+            throw new TypeCheckException(
+                    TypeCheckException.ErrorType.ERROR_DUPLICATE_RECORD_TYPE_FIELDS,
+                    "Duplicate field '" + field.stellaident_ + "' in record " + p
+            );
+          }
+          fields.add(field.stellaident_);
+
+          
+          Type newFieldType = field.type_.accept(this, ctx);
+          newFields.add(new ARecordFieldType(field.stellaident_, newFieldType));
+        }
+        
+        return new TypeRecord(newFields);
       }
 
-      public Type visit(TypeVar p, Context ctx) {
-        if (p.stellaident_.equals("auto")) {
-          return freshTypeVar();
+      public Type visit(TypeFun p, Context ctx) {
+        ListType newParams = new ListType();
+        for (Type paramType : p.listtype_) {
+          newParams.add(paramType.accept(this, ctx));
         }
-        // для auto
-        if (p.stellaident_.startsWith("?T")) return p;
-        // дженерики
-        if (!ctx.isTypeVarDefined(p.stellaident_)) {
-          throw new TypeCheckException(
-                  TypeCheckException.ErrorType.ERROR_UNDEFINED_TYPE_VARIABLE,
-                  "Undefined type variable: " + p.stellaident_
-          );
+        Type newRetType = p.type_.accept(this, ctx);
+        return new TypeFun(newParams, newRetType);
+      }
+
+      public Type visit(TypeTuple p, Context ctx) {
+        ListType newTypes = new ListType();
+        for (Type t : p.listtype_) {
+          newTypes.add(t.accept(this, ctx));
         }
-        return p;
+        return new TypeTuple(newTypes);
+      }
+
+      public Type visit(TypeSum p, Context ctx) {
+        Type newT1 = p.type_1.accept(this, ctx);
+        Type newT2 = p.type_2.accept(this, ctx);
+        return new TypeSum(newT1, newT2);
+      }
+
+      public Type visit(TypeList p, Context ctx) {
+        return new TypeList(p.type_.accept(this, ctx));
+      }
+
+      public Type visit(TypeRef p, Context ctx) {
+        return new TypeRef(p.type_.accept(this, ctx));
+      }
+
+      @Override
+      public Type visit(TypeVariant p, Context ctx) {
+        Set<String> labels = new HashSet<>();
+        ListVariantFieldType newFields = new ListVariantFieldType();
+
+        for (VariantFieldType f : p.listvariantfieldtype_) {
+          AVariantFieldType field = (AVariantFieldType) f;
+
+          if (labels.contains(field.stellaident_)) {
+            throw new TypeCheckException(
+                    TypeCheckException.ErrorType.ERROR_DUPLICATE_VARIANT_TYPE_FIELDS,
+                    "Duplicate label '" + field.stellaident_ + "'"
+            );
+          }
+          labels.add(field.stellaident_);
+
+          
+          OptionalTyping newOpt = field.optionaltyping_;
+          if (field.optionaltyping_ instanceof SomeTyping st) {
+            newOpt = new SomeTyping(st.type_.accept(this, ctx));
+          }
+
+          newFields.add(new AVariantFieldType(field.stellaident_, newOpt));
+        }
+        return new TypeVariant(newFields);
       }
     }
 
@@ -1175,7 +1299,7 @@ public class VisitTypeCheck {
       }
     }
 
-    // ------------------
+    
     public class LabelledPatternVisitor implements LabelledPattern.Visitor<Type, Context> {
       public Type visit(
               ALabelledPattern p,
@@ -1226,7 +1350,7 @@ public class VisitTypeCheck {
         return bodyType;
       }
 
-      // TODO: нужно?
+      
       public Type visit(
               LetRec p,
               Context ctx) { /* Code for LetRec goes here */
@@ -1237,24 +1361,26 @@ public class VisitTypeCheck {
         return null;
       }
 
-      // its fot Genretics
+      
       public Type visit(TypeAbstraction p, Context ctx) {
         ctx.enterTypeVarScope();
+        org.syntax.stella.Absyn.ListStellaIdent renamedVars = new org.syntax.stella.Absyn.ListStellaIdent();
+
         for (String typeVar : p.liststellaident_) {
           ctx.addTypeVariable(typeVar);
+          renamedVars.add(pushTypeVar(typeVar));
         }
 
         ctx.pushExpectedType(null);
         Type innerType = p.expr_.accept(this, ctx);
         ctx.popExpectedType();
 
+        for (String typeVar : p.liststellaident_) {
+          popTypeVar(typeVar);
+        }
         ctx.popTypeVarScope();
 
-        org.syntax.stella.Absyn.ListStellaIdent typeVars =
-                new org.syntax.stella.Absyn.ListStellaIdent();
-        typeVars.addAll(p.liststellaident_);
-
-        Type result = new TypeForAll(typeVars, innerType);
+        Type result = new TypeForAll(renamedVars, innerType);
 
         Type expected = ctx.getCurrentExpectedType();
         if (expected != null) {
@@ -1269,11 +1395,18 @@ public class VisitTypeCheck {
         Type lhsType = p.expr_1.accept(this, ctx);
         ctx.popExpectedType();
 
-        if (!(lhsType instanceof TypeRef tr)) {
+        Type resolvedLhs = resolve(lhsType);
+
+        if (resolvedLhs instanceof TypeVar tv && tv.stellaident_.startsWith("?T")) {
+          Type expectedRef = new TypeRef(freshTypeVar());
+          unify(resolvedLhs, expectedRef, ctx);
+          resolvedLhs = resolve(resolvedLhs);
+        }
+
+        if (!(resolvedLhs instanceof TypeRef tr)) {
           throw new TypeCheckException(
                   TypeCheckException.ErrorType.ERROR_NOT_A_REFERENCE,
-                  "Left side of assignment must be a reference, but got: " + TypePretty.pretty(
-                          lhsType)
+                  "Left side of assignment must be a reference, but got: " + TypePretty.pretty(resolvedLhs)
           );
         }
 
@@ -1292,7 +1425,7 @@ public class VisitTypeCheck {
         Type t1 = p.expr_1.accept(this, ctx);
         ctx.popExpectedType();
 
-        checkThatTypeIsBool(t1);
+        checkThatTypeIsBool(ctx,t1);
 
         Type expected = ctx.getCurrentExpectedType();
         /**
@@ -1312,14 +1445,7 @@ public class VisitTypeCheck {
         return t2;
       }
 
-      private void checkThatTypeIsBool(Type t1) {
-        if (!(t1 instanceof TypeBool)) {
-          throw new TypeCheckException(
-                  TypeCheckException.ErrorType.ERROR_UNEXPECTED_TYPE_FOR_EXPRESSION,
-                  new TypeBool(), t1
-          );
-        }
-      }
+  
 
       public Type visit(
               LessThan p,
@@ -1390,15 +1516,15 @@ public class VisitTypeCheck {
       public Type visit(
               TypeCast p,
               Context ctx) {
-        // 1. Проверяем выражение внутри каста (ожидаемый тип неизвестен, поэтому null)
+        
         ctx.pushExpectedType(null);
         p.expr_.accept(this, ctx);
         ctx.popExpectedType();
 
-        // 2. Получаем тип, к которому кастуем
+        
         Type targetType = p.type_.accept(new TypeVisitor(), ctx);
 
-        // 3. Возвращаем целевой тип
+        
         return targetType;
       }
 
@@ -1409,19 +1535,35 @@ public class VisitTypeCheck {
        */
       public Type visit(Abstraction p, Context ctx) {
         Type expected = ctx.getCurrentExpectedType();
-        checkThatExpectedTypeIsFunction(expected);
+        Type resolvedExpected = expected != null ? resolve(expected) : null;
+
+        
+        if (resolvedExpected != null &&
+                !(resolvedExpected instanceof TypeFun) &&
+                !(resolvedExpected instanceof TypeVar tv && tv.stellaident_.startsWith("?T"))) {
+          throw new TypeCheckException(
+                  TypeCheckException.ErrorType.ERROR_UNEXPECTED_LAMBDA,
+                  "Unexpected lambda: expected a function type in this context, but the expected type is "
+                          + TypePretty.pretty(resolvedExpected) + "."
+          );
+        }
+
         AParamDecl declaredParam = (AParamDecl) p.listparamdecl_.getFirst();
+        
+        Type paramType = declaredParam.type_.accept(new TypeVisitor(), ctx);
+
         Type expectedReturnType = null;
 
-        if (expected instanceof TypeFun ef) {
+        
+        if (resolvedExpected instanceof TypeFun ef) {
           Type expectedParamType = ef.listtype_.get(0);
-          checkLambdaParameters(expectedParamType, declaredParam.type_, ctx);
+          checkLambdaParameters(expectedParamType, paramType, ctx);
           expectedReturnType = ef.type_;
         }
 
         ctx.pushExpectedType(expectedReturnType);
         ctx.enterScope();
-        ctx.addVariable(declaredParam.stellaident_, declaredParam.type_);
+        ctx.addVariable(declaredParam.stellaident_, paramType);
 
         Type actualBodyType = p.expr_.accept(this, ctx);
 
@@ -1429,14 +1571,33 @@ public class VisitTypeCheck {
         ctx.popExpectedType();
 
         ListType lt = new ListType();
-        lt.add(declaredParam.type_);
-        return new TypeFun(lt, actualBodyType);
-      }
+        lt.add(paramType);
+        TypeFun inferredFun = new TypeFun(lt, actualBodyType);
 
+        
+        if (resolvedExpected != null) {
+          unify(resolvedExpected, inferredFun, ctx);
+        }
+
+        return inferredFun;
+      }
       private void checkLambdaParameters(
               Type expectedParamType, Type param, Context ctx) {
-        if (ctx.isSubtypingEnabled()) {
-          unify(param, expectedParamType, ctx);
+        if (ctx.isSubtypingEnabled() || ctx.isReconstructionEnabled()) {
+          try {
+            
+            unify(expectedParamType, param, ctx);
+          } catch (TypeCheckException e) {
+            
+            
+            if (e.getErrorType() == TypeCheckException.ErrorType.ERROR_UNEXPECTED_TYPE_FOR_EXPRESSION) {
+              throw new TypeCheckException(
+                      TypeCheckException.ErrorType.ERROR_UNEXPECTED_TYPE_FOR_PARAMETER,
+                      expectedParamType, param
+              );
+            }
+            throw e; 
+          }
         } else {
           if (!isSameType(param, expectedParamType)) {
             throw new TypeCheckException(
@@ -1446,7 +1607,6 @@ public class VisitTypeCheck {
           }
         }
       }
-
       private void checkThatExpectedTypeIsFunction(Type expected) {
         if (expected != null && !(expected instanceof TypeFun)) {
           throw new TypeCheckException(
@@ -1517,10 +1677,10 @@ public class VisitTypeCheck {
        */
       @Override
       public Type visit(Match p, Context ctx) {
-        // обнуляем для кейса
+        
         /**
          * fn f() -> Bool {
-         *   return match (10) { ... } // (1)
+         *   return match (10) { ... } 
          * }
          */
         ctx.pushExpectedType(null);
@@ -1682,27 +1842,26 @@ public class VisitTypeCheck {
       }
 
       private Type tryToInferListTypeFromAbove(Context ctx) {
-        if (ctx.getCurrentExpectedType() instanceof TypeList tl) {
-          return tl.type_;
-        } else if (ctx.getCurrentExpectedType() != null) {
-          throw new TypeCheckException(
-                  TypeCheckException.ErrorType.ERROR_UNEXPECTED_LIST,
-                  "Expected type " + TypePretty.pretty(
-                          ctx.getCurrentExpectedType())
-                          + " but found a list literal."
-          );
+        Type expected = ctx.getCurrentExpectedType();
+        if (expected != null) {
+          
+          Type resolved = resolve(expected);
+          if (resolved instanceof TypeList tl) {
+            return tl.type_;
+          }
         }
+        
+        
         return null;
       }
-
 
       public Type visit(
               Add p,
               Context ctx) { /* Code for Add goes here */
         var t1 = p.expr_1.accept(new ExprVisitor(), ctx);
         var t2 = p.expr_2.accept(new ExprVisitor(), ctx);
-        checkThatTypeIsNat(t1);
-        checkThatTypeIsNat(t2);
+        checkThatTypeIsNat(ctx,t1);
+        checkThatTypeIsNat(ctx,t2);
 
         return new TypeNat();
       }
@@ -1712,8 +1871,8 @@ public class VisitTypeCheck {
               Context ctx) { /* Code for Subtract goes here */
         var t1 = p.expr_1.accept(new ExprVisitor(), ctx);
         var t2 = p.expr_2.accept(new ExprVisitor(), ctx);
-        checkThatTypeIsNat(t1);
-        checkThatTypeIsNat(t2);
+        checkThatTypeIsNat(ctx,t1);
+        checkThatTypeIsNat(ctx,t2);
         return new TypeNat();
       }
 
@@ -1722,8 +1881,8 @@ public class VisitTypeCheck {
               Context ctx) { /* Code for LogicOr goes here */
         var t1 = p.expr_1.accept(new ExprVisitor(), ctx);
         var t2 = p.expr_2.accept(new ExprVisitor(), ctx);
-        checkThatTypeIsBool(t1);
-        checkThatTypeIsBool(t2);
+        checkThatTypeIsBool(ctx,t1);
+        checkThatTypeIsBool(ctx,t2);
         return new TypeBool();
       }
 
@@ -1732,8 +1891,8 @@ public class VisitTypeCheck {
               Context ctx) { /* Code for Multiply goes here */
         var t1 = p.expr_1.accept(new ExprVisitor(), ctx);
         var t2 = p.expr_2.accept(new ExprVisitor(), ctx);
-        checkThatTypeIsNat(t1);
-        checkThatTypeIsNat(t2);
+        checkThatTypeIsNat(ctx,t1);
+        checkThatTypeIsNat(ctx,t2);
         return new TypeNat();
       }
 
@@ -1742,8 +1901,8 @@ public class VisitTypeCheck {
               Context ctx) { /* Code for Divide goes here */
         var t1 = p.expr_1.accept(new ExprVisitor(), ctx);
         var t2 = p.expr_2.accept(new ExprVisitor(), ctx);
-        checkThatTypeIsNat(t1);
-        checkThatTypeIsNat(t2);
+        checkThatTypeIsNat(ctx,t1);
+        checkThatTypeIsNat(ctx,t2);
         return new TypeNat();
       }
 
@@ -1752,8 +1911,8 @@ public class VisitTypeCheck {
               Context ctx) { /* Code for LogicAnd goes here */
         var t1 = p.expr_1.accept(new ExprVisitor(), ctx);
         var t2 = p.expr_2.accept(new ExprVisitor(), ctx);
-        checkThatTypeIsBool(t1);
-        checkThatTypeIsBool(t2);
+        checkThatTypeIsBool(ctx,t1);
+        checkThatTypeIsBool(ctx,t2);
         return new TypeBool();
       }
 
@@ -1793,21 +1952,40 @@ public class VisitTypeCheck {
         Type innerType = p.expr_.accept(this, ctx);
         ctx.popExpectedType();
 
-        if (innerType instanceof TypeRef tr) {
+
+        if (expected != null) {
+          unify(new TypeRef(expected), innerType, ctx);
+        }
+
+        Type resolvedInner = resolve(innerType);
+
+        if (resolvedInner instanceof TypeVar tv && tv.stellaident_.startsWith("?T")) {
+          Type expectedRef = new TypeRef(freshTypeVar());
+          unify(resolvedInner, expectedRef, ctx);
+          resolvedInner = resolve(resolvedInner);
+        }
+
+        if (resolvedInner instanceof TypeRef tr) {
           return tr.type_;
         } else {
           throw new TypeCheckException(
                   TypeCheckException.ErrorType.ERROR_NOT_A_REFERENCE,
-                  "Attempt to dereference a non-reference type: " + TypePretty.pretty(
-                          innerType)
+                  "Attempt to dereference a non-reference type: " + TypePretty.pretty(resolvedInner)
           );
         }
-      }
-
-      public Type visit(Application p, Context ctx) {
+      }      public Type visit(Application p, Context ctx) {
         ctx.pushExpectedType(null);
         Type funType = p.expr_.accept(this, ctx);
         ctx.popExpectedType();
+
+        Type resolvedFunType = resolve(funType);
+
+        if (!(resolvedFunType instanceof TypeFun) && !(resolvedFunType instanceof TypeVar)) {
+          throw new TypeCheckException(
+                  TypeCheckException.ErrorType.ERROR_NOT_A_FUNCTION,
+                  "Expected a function type but got: " + TypePretty.pretty(resolvedFunType)
+          );
+        }
 
         Expr argExpr = p.listexpr_.getFirst();
         ctx.pushExpectedType(null);
@@ -1819,11 +1997,9 @@ public class VisitTypeCheck {
         expectedParamTypes.add(argType);
         Type expectedFunType = new TypeFun(expectedParamTypes, returnTypeVar);
 
-        unify(funType, expectedFunType, ctx);
+        unify(resolvedFunType, expectedFunType, ctx);
         return resolve(returnTypeVar);
       }
-
-
       public Type visit(TypeApplication p, Context ctx) {
         ctx.pushExpectedType(null);
         Type exprType = p.expr_.accept(this, ctx);
@@ -1912,7 +2088,7 @@ public class VisitTypeCheck {
               DotTuple p,
 
               Context ctx) { /* Code for DotTuple goes here */
-        ctx.pushExpectedType(null); // нужно?
+        ctx.pushExpectedType(null); 
         Type typeLeft = p.expr_.accept(new ExprVisitor(), ctx);
         ctx.popExpectedType();
         TypeTuple tuple = checkThatTypeIsTypeTuple(typeLeft);
@@ -2286,18 +2462,36 @@ public class VisitTypeCheck {
         return null;
       }
 
-      public Type visit(
-              Inl p,
-              Context ctx) { /* Code for Inl goes here */
+      public Type visit(Inl p, Context ctx) {
         Type currentExpected = ctx.getCurrentExpectedType();
+        Type resolvedExpected = currentExpected != null ? resolve(currentExpected) : null;
 
-        if (currentExpected == null) {
+        
+        if (resolvedExpected == null || (resolvedExpected instanceof TypeVar tv && tv.stellaident_.startsWith("?T"))) {
+          if (ctx.isReconstructionEnabled()) {
+            ctx.pushExpectedType(null);
+            Type actualInner = p.expr_.accept(this, ctx);
+            ctx.popExpectedType();
+
+            TypeSum inferredSum = new TypeSum(actualInner, freshTypeVar());
+
+            
+            if (resolvedExpected != null) {
+              unify(resolvedExpected, inferredSum, ctx);
+            }
+            return inferredSum;
+          }
+
           if (ctx.isAmbiguousAsBottom()) {
             ctx.pushExpectedType(null);
             Type actualInner = p.expr_.accept(this, ctx);
             ctx.popExpectedType();
 
-            return new TypeSum(actualInner, new TypeBottom());
+            TypeSum inferredSum = new TypeSum(actualInner, new TypeBottom());
+            if (resolvedExpected != null) {
+              unify(resolvedExpected, inferredSum, ctx);
+            }
+            return inferredSum;
           }
 
           throw new TypeCheckException(
@@ -2306,11 +2500,10 @@ public class VisitTypeCheck {
           );
         }
 
-        if (!(currentExpected instanceof TypeSum ts)) {
+        if (!(resolvedExpected instanceof TypeSum ts)) {
           throw new TypeCheckException(
                   TypeCheckException.ErrorType.ERROR_UNEXPECTED_INJECTION,
-                  "Expected " + TypePretty.pretty(
-                          currentExpected) + " but found inl(...)"
+                  "Expected " + TypePretty.pretty(resolvedExpected) + " but found inl(...)"
           );
         }
 
@@ -2320,32 +2513,51 @@ public class VisitTypeCheck {
 
         unify(ts.type_1, actualInner, ctx);
 
-        return currentExpected;
+        return resolvedExpected;
       }
 
-      public Type visit(
-              Inr p,
-              Context ctx) { /* Code for Inr goes here */
+      public Type visit(Inr p, Context ctx) {
         Type currentExpected = ctx.getCurrentExpectedType();
+        Type resolvedExpected = currentExpected != null ? resolve(currentExpected) : null;
 
-        if (currentExpected == null) {
+        
+        if (resolvedExpected == null || (resolvedExpected instanceof TypeVar tv && tv.stellaident_.startsWith("?T"))) {
+          if (ctx.isReconstructionEnabled()) {
+            ctx.pushExpectedType(null);
+            Type actualInner = p.expr_.accept(this, ctx);
+            ctx.popExpectedType();
+
+            TypeSum inferredSum = new TypeSum(freshTypeVar(), actualInner);
+
+            
+            if (resolvedExpected != null) {
+              unify(resolvedExpected, inferredSum, ctx);
+            }
+            return inferredSum;
+          }
+
           if (ctx.isAmbiguousAsBottom()) {
             ctx.pushExpectedType(null);
             Type actualInner = p.expr_.accept(this, ctx);
             ctx.popExpectedType();
-            return new TypeSum(new TypeBottom(), actualInner);
+
+            TypeSum inferredSum = new TypeSum(new TypeBottom(), actualInner);
+            if (resolvedExpected != null) {
+              unify(resolvedExpected, inferredSum, ctx);
+            }
+            return inferredSum;
           }
+
           throw new TypeCheckException(
                   TypeCheckException.ErrorType.ERROR_AMBIGUOUS_SUM_TYPE,
                   "Cannot infer type for 'inr' without context."
           );
         }
 
-        if (!(currentExpected instanceof TypeSum ts)) {
+        if (!(resolvedExpected instanceof TypeSum ts)) {
           throw new TypeCheckException(
                   TypeCheckException.ErrorType.ERROR_UNEXPECTED_INJECTION,
-                  "Expected " + TypePretty.pretty(
-                          currentExpected) + " but found inr(...)"
+                  "Expected " + TypePretty.pretty(resolvedExpected) + " but found inr(...)"
           );
         }
 
@@ -2354,9 +2566,8 @@ public class VisitTypeCheck {
         ctx.popExpectedType();
         unify(ts.type_2, actualInner, ctx);
 
-        return currentExpected;
+        return resolvedExpected;
       }
-
 
       private void checkForAmbiguousSumType(Type currentExpected) {
         if (currentExpected == null) {
@@ -2384,7 +2595,7 @@ public class VisitTypeCheck {
               Succ p,
               Context ctx) { /* Code for Succ goes here */
         var t1 = p.expr_.accept(new ExprVisitor(), ctx);
-        checkThatTypeIsNat(t1);
+        checkThatTypeIsNat(ctx,t1);
         return new TypeNat();
       }
 
@@ -2392,7 +2603,7 @@ public class VisitTypeCheck {
               LogicNot p,
               Context ctx) { /* Code for LogicNot goes here */
         var t1 = p.expr_.accept(new ExprVisitor(), ctx);
-        checkThatTypeIsBool(t1);
+        checkThatTypeIsBool(ctx,t1);
         return new TypeBool();
       }
 
@@ -2400,7 +2611,7 @@ public class VisitTypeCheck {
               Pred p,
               Context ctx) { /* Code for Pred goes here */
         var t1 = p.expr_.accept(new ExprVisitor(), ctx);
-        checkThatTypeIsNat(t1);
+        checkThatTypeIsNat(ctx,t1);
         return new TypeNat();
       }
 
@@ -2408,13 +2619,13 @@ public class VisitTypeCheck {
               IsZero p,
               Context ctx) { /* Code for IsZero goes here */
         var t1 = p.expr_.accept(new ExprVisitor(), ctx);
-        checkThatTypeIsNat(t1);
+        checkThatTypeIsNat(ctx,t1);
         return new TypeBool();
       }
 
-      // Γ ` t1 : T1→T1
-      //---------------------
-      //Γ ` fix t1 : T1
+      
+      
+      
       public Type visit(Fix p, Context ctx) {
         /**
          * если нам сверху сказали, что fix должен вернуть тип T, то
@@ -2457,7 +2668,7 @@ public class VisitTypeCheck {
         ctx.pushExpectedType(new TypeNat());
         var t1 = p.expr_1.accept(new ExprVisitor(), ctx);
         ctx.popExpectedType();
-        checkThatTypeIsNat(t1);
+        checkThatTypeIsNat(ctx,t1);
 
         var t2 = p.expr_2.accept(new ExprVisitor(), ctx);
         ListType innerParamTypes = new ListType();
@@ -2479,13 +2690,12 @@ public class VisitTypeCheck {
       }
 
 
-      private void checkThatTypeIsNat(Type t1) {
-        if (!(t1 instanceof TypeNat)) {
-          throw new TypeCheckException(
-                  TypeCheckException.ErrorType.ERROR_UNEXPECTED_TYPE_FOR_EXPRESSION,
-                  new TypeNat(), t1
-          );
-        }
+      private void checkThatTypeIsNat( Context ctx, Type t1) {
+        unify(new TypeNat(), t1, ctx);
+      }
+
+      private void checkThatTypeIsBool( Context ctx, Type t1) {
+        unify(new TypeBool(), t1, ctx);
       }
 
       public Type visit(
@@ -2535,13 +2745,15 @@ public class VisitTypeCheck {
       }
 
       public Type visit(ConstMemory p, Context ctx) {
+        if (ctx.isReconstructionEnabled()) {
+          return new TypeRef(freshTypeVar());
+        }
+
         Type expected = ctx.getCurrentExpectedType();
 
         if (expected == null) {
           if (ctx.isAmbiguousAsBottom()) {
-            return new TypeRef(
-                    new TypeBottom()); // или не
-            // оборачивать?
+            return new TypeRef(new TypeBottom());
           }
           throw new TypeCheckException(
                   TypeCheckException.ErrorType.ERROR_AMBIGUOUS_REFERENCE_TYPE,
@@ -2576,11 +2788,11 @@ public class VisitTypeCheck {
               APatternBinding p,
               Context ctx) {
 
-        // сначала infer правую часть (expr)
+        
         ctx.pushExpectedType(null);
         Type exprType = p.expr_.accept(new ExprVisitor(), ctx);
         ctx.popExpectedType();
-        // затем чекнем левую часть с этим типом
+        
         ctx.pushExpectedType(exprType);
         p.pattern_.accept(new PatternVisitor(), ctx);
         ctx.popExpectedType();

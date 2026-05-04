@@ -39,6 +39,22 @@ public class TypeCheckException extends RuntimeException {
     this.errorType = errorType;
   }
 
+  public String getContextMessage() {
+    return contextMessage;
+  }
+
+  public Type getExpectedType() {
+    return expectedType;
+  }
+
+  public Type getActualType() {
+    return actualType;
+  }
+
+  public ErrorType getErrorType() {
+    return errorType;
+  }
+
   private final ErrorType errorType;
 
   @Override
